@@ -20,11 +20,17 @@
 
 #include <KokkosKernels_Utils.hpp>
 
+#include "Tpetra_FECrsMatrix.hpp"
+
 namespace FROSch {
 
     using namespace std;
     using namespace Teuchos;
     using namespace Xpetra;
+
+    template <class SC,class LO,class GO,class NO>
+    RCP<const Matrix<SC,LO,GO,NO> > ExtractLocalSubdomainMatrix_feTest(Teuchos::RCP< const Tpetra::FECrsMatrix<SC,LO,GO,NO> > globalMatrix,
+                                                                RCP<const Map<LO,GO,NO> > map);
 
     template <class SC,class LO,class GO,class NO>
     RCP<const Matrix<SC,LO,GO,NO> > ExtractLocalSubdomainMatrix(RCP<const Matrix<SC,LO,GO,NO> > globalMatrix,

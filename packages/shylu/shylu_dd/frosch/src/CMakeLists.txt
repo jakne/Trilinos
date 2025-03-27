@@ -30,13 +30,14 @@ TRIBITS_INCLUDE_DIRECTORIES(${PROJECT_SOURCE_DIR})
 #
 TRIBITS_INCLUDE_DIRECTORIES(${CMAKE_CURRENT_BINARY_DIR})
 TRIBITS_INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR})
+TRIBITS_INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}/Adapters)
 TRIBITS_INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}/CoarseSpaces)
+TRIBITS_INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}/EigenSolverInterfaces)
 TRIBITS_INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}/InterfaceSets)
 TRIBITS_INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}/SchwarzOperators)
 TRIBITS_INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}/SchwarzPreconditioners)
 TRIBITS_INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}/SolverInterfaces)
 TRIBITS_INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}/Tools)
-TRIBITS_INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}/Adapters)
 
 
 
@@ -75,6 +76,16 @@ APPEND_SET(HEADERS
   CoarseSpaces/FROSch_PartitionOfUnity_def.hpp
   CoarseSpaces/FROSch_RGDSWInterfacePartitionOfUnity_decl.hpp
   CoarseSpaces/FROSch_RGDSWInterfacePartitionOfUnity_def.hpp
+  EigenSolverInterfaces/FROSch_EigenSolver_decl.hpp
+  EigenSolverInterfaces/FROSch_EigenSolver_def.hpp
+  EigenSolverInterfaces/FROSch_EigenSolverFactory_decl.hpp
+  EigenSolverInterfaces/FROSch_EigenSolverFactory_def.hpp
+  EigenSolverInterfaces/FROSch_EigenSolverFactory_fwd_decl.hpp
+  EigenSolverInterfaces/FROSch_EigenSolver_LAPACK_decl.hpp
+  EigenSolverInterfaces/FROSch_EigenSolver_LAPACK_def.hpp
+  EigenSolverInterfaces/FROSch_EigenSolverOperator_decl.hpp
+  EigenSolverInterfaces/FROSch_EigenSolverOperator_def.hpp
+  EigenSolverInterfaces/FROSch_EigenSolverOperator_SchurComplement_decl.hpp
   InterfaceSets/FROSch_DDInterface_decl.hpp
   InterfaceSets/FROSch_DDInterface_def.hpp
   InterfaceSets/FROSch_EntitySet_decl.hpp

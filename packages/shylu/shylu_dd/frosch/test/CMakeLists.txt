@@ -1,4 +1,5 @@
 ADD_SUBDIRECTORIES(
+    AdaptiveGDSW
     Import_Tpetra
     InterfacePartitionOfUnity
     InterfaceSets

@@ -237,9 +237,11 @@ namespace FROSch {
     int EntitySet<SC,LO,GO,NO>::flagNodes()
     {
         for (UN i=0; i<getNumEntities(); i++) {
+            /*$$$
             if (getEntity(i)->getNumNodes()==1) {
                 getEntity(i)->resetEntityFlag(NodeFlag);
             }
+            */
         }
         return 0;
     }
@@ -248,9 +250,9 @@ namespace FROSch {
     int EntitySet<SC,LO,GO,NO>::flagShortEntities()
     {
         for (UN i=0; i<getNumEntities(); i++) {
-            if (getEntity(i)->getNumNodes()==2) {
-                getEntity(i)->resetEntityFlag(ShortFlag);
-            }
+//            if (getEntity(i)->getNumNodes()==2) {//$$$$
+//                getEntity(i)->resetEntityFlag(ShortFlag);
+//            }
         }
         return 0;
     }
@@ -381,12 +383,14 @@ namespace FROSch {
     template<class SC,class LO,class GO,class NO>
     bool EntitySet<SC,LO,GO,NO>::checkForVertices()
     {
+        /* $$$
         for (UN i=0; i<getNumEntities(); i++) {
             if (getEntity(i)->getNumNodes()==1) {
                 i--;
                 return true;
             }
         }
+        */
         return false;
     }
 
@@ -394,10 +398,10 @@ namespace FROSch {
     bool EntitySet<SC,LO,GO,NO>::checkForShortEdges()
     {
         for (UN i=0; i<getNumEntities(); i++) {
-            if (getEntity(i)->getNumNodes()==2) {
-                i--;
-                return true;
-            }
+//            if (getEntity(i)->getNumNodes()==2) {//$$$
+//                i--;
+//                return true;
+//            }
         }
         return false;
     }

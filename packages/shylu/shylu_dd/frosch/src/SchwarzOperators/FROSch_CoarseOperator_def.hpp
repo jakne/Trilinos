@@ -12,6 +12,7 @@
 
 #include <FROSch_CoarseOperator_decl.hpp>
 
+#include <Xpetra_IO.hpp> // [JK] Added
 
 namespace FROSch {
 
@@ -60,6 +61,9 @@ namespace FROSch {
                 CoarseSpace_->buildGlobalBasisMatrix(this->K_->getRowMap(),this->K_->getRangeMap(),subdomainMap,this->ParameterList_->get("Phi: Dropping Threshold",1.e-8));
                 FROSCH_ASSERT(CoarseSpace_->hasGlobalBasisMatrix(),"FROSch::CoarseOperator : !CoarseSpace_->hasGlobalBasisMatrix()");
                 Phi_ = CoarseSpace_->getGlobalBasisMatrix();
+
+                // Xpetra::IO< SC, LO, GO, NO >::Write("K_.txt", *(this->K_), true); // TODO: [JK]
+                // Xpetra::IO< SC, LO, GO, NO >::Write("Phi_.txt", *(this->Phi_), true); // TODO: [JK]
             }
         }
         if (!reuseCoarseMatrix) {
@@ -80,6 +84,10 @@ namespace FROSch {
             this->ParameterList_->set("RCP(Coarse Matrix)", CoarseMatrix_);
             this->ParameterList_->set("bool(CoarseSolveComm)", OnCoarseSolveComm_);
         }
+
+        // if (this->MpiComm_->getRank() == 0) {
+            // Xpetra::IO< SC, LO, GO, NO >::Write("CoarseMatrix_.txt", *(this->CoarseMatrix_), true); // TODO: [JK]
+        // }
 
         return 0;
     }

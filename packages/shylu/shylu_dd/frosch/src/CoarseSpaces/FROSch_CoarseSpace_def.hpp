@@ -28,7 +28,7 @@ namespace FROSch {
 
     }
 
-    // Will man Informationen über die Subspaces als strings reingeben?
+    // Do we want to pass information about the subspaces via std::strings?
     template <class SC,class LO,class GO,class NO>
     int CoarseSpace<SC,LO,GO,NO>::addSubspace(ConstXMapPtr subspaceBasisMap,
                                               ConstXMapPtr subspaceBasisMapUnique,

@@ -1,0 +1,14 @@
+TRIBITS_ADD_EXECUTABLE(
+Diffusion_Heterogeneous
+SOURCES Diffusion_Heterogeneous.cpp
+)
+
+TRIBITS_COPY_FILES_TO_BINARY_DIR(AdaptiveGDSW
+    DEST_FILES ParameterList.xml ParameterList_GDSWPreconditioner.xml
+    SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}
+    DEST_DIR ${CMAKE_CURRENT_BINARY_DIR}
+    EXEDEPS Diffusion_Heterogeneous
+)
+
+ADD_SUBDIRECTORIES(
+)

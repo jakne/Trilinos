@@ -15,6 +15,7 @@
 #include <Xpetra_Export.hpp>
 #include <Xpetra_Import.hpp>
 #include <Xpetra_ImportFactory.hpp>
+#include <Teuchos_SerialDenseMatrix.hpp>
 
 
 namespace FROSch {
@@ -1104,14 +1105,14 @@ namespace FROSch {
         for (unsigned j=0; j<dofsPerNode; j++) {
             dofs[j] = ArrayRCP<GO>(map->getLocalNumElements()/dofsPerNode);
         }
-        if (dofOrdering==0) {
+        if (dofOrdering==0) { // node-wise (x1,y1,z1),...,(xn,yn,zn)
             for (unsigned i=0; i<nodes.size(); i++) {
                 nodes[i] = map->getGlobalElement(dofsPerNode*i)/dofsPerNode;
                 for (unsigned j=0; j<dofsPerNode; j++) {
                     dofs[j][i] = dofsPerNode*nodes[i]+j+offset;
                 }
             }
-        } else if (dofOrdering == 1) {
+        } else if (dofOrdering == 1) { // dimension-wise (x1,...,xn),(y1,...,yn),(z1,...,zn)
             GO numGlobalIDs = map->getMaxAllGlobalIndex()+1;
             for (unsigned i=0; i<nodes.size(); i++) {
                 nodes[i] = map->getGlobalElement(i);
@@ -1674,6 +1675,216 @@ namespace FROSch {
         return 0;
     }
 #endif
+
+    template <typename SC, typename LO, typename GO, typename NO>
+    Teuchos::RCP<Tpetra::FECrsMatrix<SC,LO,GO,NO>> FECrsMatrix_deepCopy(const Teuchos::RCP<const Tpetra::FECrsMatrix<SC,LO,GO,NO>> matrix_in, Teuchos::RCP<Tpetra::FECrsGraph<>> fe_graph) {
+        // Teuchos::RCP< const Tpetra::CrsMatrix<SC,LO,GO,NO> > matrix_in__crs = Teuchos::rcp_dynamic_cast< const Tpetra::CrsMatrix<SC,LO,GO,NO> >(matrix_in);
+        // Teuchos::RCP< const Tpetra::FECrsGraph<> > new_graph = Teuchos::rcp_dynamic_cast< const Tpetra::FECrsGraph<> >(matrix_in__crs->getCrsGraph());
+        // const Tpetra::FECrsGraph<>* new_graph = dynamic_cast< const Tpetra::FECrsGraph<>* >(&(*(matrix_in__crs->getCrsGraph())));
+        // TODO:
+        // I get a null pointer for new_graph, so the downcast does not seem to work.
+        // How do we get the graph from matrix_in? It is a private member of FECrsMatrix. Can a getter getFECrsGraph() be added to FECrsMatrix?
+    
+        Teuchos::RCP<Tpetra::FECrsMatrix<SC,LO,GO,NO>> matrix_out = Teuchos::rcp(new Tpetra::FECrsMatrix<SC,LO,GO,NO>(fe_graph));
+        Tpetra::beginAssembly(*matrix_out);
+        {
+            const int numLocalRows = (int)matrix_in->getLocalNumRows();
+            for (int localRow = 0; localRow < numLocalRows; localRow++) {
+                typename Tpetra::CrsMatrix<SC,LO,GO,NO>::local_inds_host_view_type localColumns;
+                typename Tpetra::CrsMatrix<SC,LO,GO,NO>::values_host_view_type values;
+                matrix_in->getLocalRowView(localRow, localColumns, values);
+                matrix_out->replaceLocalValues(localRow, localColumns, values);
+            }
+        }
+        return matrix_out;
+    }
+
+    template < typename SC, typename LO, typename GO, typename NO > 
+    Teuchos::RCP< Teuchos::SerialDenseMatrix< LO, SC > > convert_LocalSquareXMatrix_to_SerialDenseMatrix(
+            Teuchos::RCP< const Xpetra::Matrix<SC,LO,GO,NO> > matrix_in) {
+        using Matrix_Dense_ptr = Teuchos::RCP< Teuchos::SerialDenseMatrix< LO, SC > >;
+        const LO numRows = matrix_in->getLocalNumRows();
+        Matrix_Dense_ptr matrix_out = Teuchos::rcp(new Teuchos::SerialDenseMatrix<LO,SC>(numRows,numRows));
+        for (int i = 0; i < numRows; i++) {
+            ArrayView<const LO> indices;
+            ArrayView<const SC> values;
+            matrix_in->getLocalRowView(i,indices,values);
+            for (int j = 0; j < indices.size(); j++) {
+                // [JK] Todo: assert indices[j] < numRows ( == numCols)
+                (*matrix_out)(i,indices[j]) = values[j];
+            }
+        }
+        return matrix_out;
+    }
+
+#ifdef HAVE_FROSch_DEBUG
+namespace debug {  // FROSch::debug
+    template <typename map_type>
+    void printMap(const Teuchos::RCP<map_type> map, const std::string strInfoToDisplay, const char* file, const int line)
+    {
+        const int wait_ns = 30000;  // wait timer so console output does not overlap from different ranks
+        Teuchos::RCP<const Teuchos::Comm<int>> mpiComm = map->getComm();
+        std::cout << std::flush;
+        std::this_thread::sleep_for(std::chrono::nanoseconds(wait_ns));
+        mpiComm->barrier();
+        if (mpiComm->getRank() == 0) {
+            // info-to-display (local index | global index)  [/home/user/.../main.cpp:103]
+            std::cout << strInfoToDisplay << " (local index | global index)";
+            if (file != 0) {
+                std::cout << "  [" << file;
+                if (line > 0) {
+                    std::cout << ":" << line;
+                }
+                std::cout << "]";
+            }
+            std::cout << std::endl;
+            std::cout << std::flush;
+        }
+        std::this_thread::sleep_for(std::chrono::nanoseconds(wait_ns));
+        mpiComm->barrier();
+        for (int rank = 0; rank < mpiComm->getSize(); rank++) {
+            if (rank == mpiComm->getRank()) {
+                // rank(i): (local_index_1 | global_index_1) (local_index_2 | global_index_2) ...
+                std::cout << "rank (" << rank << "): ";
+                for (std::size_t ind = 0; ind < map->getLocalNumElements(); ind++) {
+                    std::cout << "(" << ind << "|" << map->getGlobalElement(ind) << ") ";
+                }
+                std::cout << std::endl;
+                std::cout << std::flush;
+                std::this_thread::sleep_for(std::chrono::nanoseconds(wait_ns));
+            }
+            mpiComm->barrier();
+        }
+    }
+
+    template <typename matrix_type>
+    void printXpetraMatrix_local_dense(const Teuchos::RCP<matrix_type> M, const std::string strInfoToDisplay, const char* file, const int line)
+    {
+        using SC = typename matrix_type::scalar_type;
+        using LO = typename matrix_type::local_ordinal_type;
+        const int wait_ns = 30000;  // wait timer so console output does not overlap from different ranks
+        Teuchos::RCP<const Teuchos::Comm<int>> mpiComm = M->getRowMap()->getComm();
+        std::cout << std::flush;
+        std::this_thread::sleep_for(std::chrono::nanoseconds(wait_ns));
+        mpiComm->barrier();
+        if (mpiComm->getRank() == 0) {
+            std::cout << strInfoToDisplay;
+            if (file != 0) {
+                std::cout << "  [" << file;
+                if (line > 0) {
+                    std::cout << ":" << line;
+                }
+                std::cout << "]";
+            }
+            std::cout << std::endl;
+            std::cout << "global num rows: " << M->getGlobalNumRows() << std::endl;
+            std::cout << "global num cols: " << M->getGlobalNumCols() << std::endl;
+            std::cout << std::flush;
+        }
+        std::this_thread::sleep_for(std::chrono::nanoseconds(wait_ns));
+        mpiComm->barrier();
+        for (int rank = 0; rank < mpiComm->getSize(); rank++) {
+            if (rank == mpiComm->getRank()) {
+                const std::size_t numRows = M->getLocalNumRows();
+                const std::size_t numCols = M->getColMap()->getMaxLocalIndex() + 1; // index is zero-based
+                std::cout << "rank(" << rank << ") local num rows: " << numRows << std::endl;
+                std::cout << "rank(" << rank << ") local num cols: " << numCols << std::endl;
+                for (std::size_t row = 0; row < numRows; row++) {
+                    Teuchos::ArrayView<const LO> indices;
+                    Teuchos::ArrayView<const SC> values;
+                    M->getLocalRowView(row, indices, values);
+                    std::vector<SC> values_full_row(numCols, Teuchos::ScalarTraits<SC>::zero());
+                    for (int k = 0; k < indices.size(); k++) {
+                        values_full_row[indices[k]] = values[k];
+                    }
+                    for (std::size_t col = 0; col < numCols; col++) {
+                        std::cout << values_full_row[col] << "  ";
+                    }
+                    std::cout << std::endl;
+                }
+                std::cout << std::flush;
+                std::this_thread::sleep_for(std::chrono::nanoseconds(wait_ns));
+            }
+            mpiComm->barrier();
+        }
+    }
+
+    template <int typeLA, typename matrix_type>
+    void printCrsMatrix_local_sparse(const Teuchos::RCP<matrix_type> M, const std::string strInfoToDisplay, const char* file, const int line)
+    {
+        using SC = typename matrix_type::scalar_type;
+        using LO = typename matrix_type::local_ordinal_type;
+        using GO = typename matrix_type::global_ordinal_type;
+        using NO = typename matrix_type::node_type;
+        const int wait_ns = 30000;  // wait timer so console output does not overlap from different ranks
+        Teuchos::RCP<const Teuchos::Comm<int>> mpiComm = M->getRowMap()->getComm();
+        std::cout << std::flush;
+        std::this_thread::sleep_for(std::chrono::nanoseconds(wait_ns));
+        mpiComm->barrier();
+        if (mpiComm->getRank() == 0) {
+            std::cout << strInfoToDisplay;
+            if (file != 0) {
+                std::cout << "  [" << file;
+                if (line > 0) {
+                    std::cout << ":" << line;
+                }
+                std::cout << "]";
+            }
+            std::cout << std::endl;
+            std::cout << "global num rows: " << M->getGlobalNumRows() << std::endl;
+            std::cout << "global num cols: " << M->getGlobalNumCols() << std::endl;
+            std::cout << std::flush;
+        }
+        std::this_thread::sleep_for(std::chrono::nanoseconds(wait_ns));
+        mpiComm->barrier();
+        for (int rank = 0; rank < mpiComm->getSize(); rank++) {
+            if (rank == mpiComm->getRank()) {
+                const std::size_t numRows = M->getLocalNumRows();
+                const std::size_t numCols = M->getColMap()->getMaxLocalIndex() + 1; // index is zero-based
+                std::cout << "rank(" << rank << ") local num rows: " << numRows << std::endl;
+                std::cout << "rank(" << rank << ") local num cols: " << numCols << std::endl;
+                std::cout << "rank(" << rank << ") matrix entries: [local row id | global row id] (local column id | global column id | value)" << std::endl;
+                for (std::size_t row = 0; row < numRows; row++) {
+                    GO global_row_id = M->getRowMap()->getGlobalElement(row);
+                    std::cout << "   [" << row << "|" << global_row_id << "]  ";
+                    if constexpr (typeLA == 24) {
+                        Teuchos::ArrayView<const LO> indices;
+                        Teuchos::ArrayView<const SC> values;
+                        M->getLocalRowView(row, indices, values);
+                        for (int i = 0; i < indices.size(); i++) {
+                            std::cout << "(" << indices[i] << "|" << M->getColMap()->getGlobalElement(indices[i]) << "|" << values[i] << ") ";
+                        }
+                    } else {
+                        typename Tpetra::CrsMatrix<SC,LO,GO,NO>::local_inds_host_view_type indices;
+                        typename Tpetra::CrsMatrix<SC,LO,GO,NO>::values_host_view_type values;
+                        M->getLocalRowView(row, indices, values);
+                        for (std::size_t i = 0; i < indices.size(); i++) {
+                            std::cout << "(" << indices[i] << "|" << M->getColMap()->getGlobalElement(indices[i]) << "|" << values[i] << ") ";
+                        }
+                    }
+                    std::cout << std::endl;
+                }
+                std::cout << std::flush;
+                std::this_thread::sleep_for(std::chrono::nanoseconds(wait_ns));
+            }
+            mpiComm->barrier();
+        }
+    }
+
+    template <typename matrix_type>
+    void printTpetraCrsMatrix_local_sparse(const Teuchos::RCP<matrix_type> M, const std::string strInfoToDisplay, const char* file, const int line)
+    {
+        printCrsMatrix_local_sparse<0>(M,strInfoToDisplay,file,line);
+    }
+
+    template <typename matrix_type>
+    void printXpetraMatrix_local_sparse(const Teuchos::RCP<matrix_type> M, const std::string strInfoToDisplay, const char* file, const int line)
+    {
+        printCrsMatrix_local_sparse<24>(M,strInfoToDisplay,file,line);
+    }
+} // namespace FROSch::debug
+#endif
+
 } // namespace FROSch
 
 #endif

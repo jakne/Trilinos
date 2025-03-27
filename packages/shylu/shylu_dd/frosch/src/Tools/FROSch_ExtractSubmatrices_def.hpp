@@ -19,6 +19,81 @@ namespace FROSch {
     using namespace Xpetra;
 
     template <class SC,class LO,class GO,class NO>
+    RCP<const Matrix<SC,LO,GO,NO> > ExtractLocalSubdomainMatrix_feTest(Teuchos::RCP< const Tpetra::FECrsMatrix<SC,LO,GO,NO> > globalMatrix,
+                                                                RCP<const Map<LO,GO,NO> > map)
+    {
+        
+        //RCP<Matrix<SC,LO,GO,NO> > subdomainMatrix = MatrixFactory<SC,LO,GO,NO>::Build(map,globalMatrix->getGlobalMaxNumRowEntries());
+        //RCP<Import<LO,GO,NO> > scatter = ImportFactory<LO,GO,NO>::Build(globalMatrix->getRowMap(),map);
+        /*
+        subdomainMatrix->doImport(*globalMatrix,*scatter,ADD);
+        //cout << *subdomainMatrix << endl;
+        
+        
+        */
+        RCP<const Comm<LO> > SerialComm = rcp(new MpiComm<LO>(MPI_COMM_SELF));
+        RCP<Map<LO,GO,NO> > localSubdomainMap = MapFactory<LO,GO,NO>::Build(map->lib(),map->getLocalNumElements(),0,SerialComm);
+        RCP<Matrix<SC,LO,GO,NO> > localSubdomainMatrix = MatrixFactory<SC,LO,GO,NO>::Build(localSubdomainMap,globalMatrix->getGlobalMaxNumRowEntries());
+        for (unsigned row=0; row<localSubdomainMap->getLocalNumElements(); row++) {
+            typename Tpetra::CrsMatrix<>::local_inds_host_view_type indices;
+            typename Tpetra::CrsMatrix<>::values_host_view_type values;
+            globalMatrix->getLocalRowView(row,indices,values);
+            //ArrayView<const GO> indices;
+            //ArrayView<const SC> values;
+            //subdomainMatrix->getGlobalRowView(map->getGlobalElement(i),indices,values);
+            
+//            if (map->getComm()->getRank() == 1) {
+//                std::cout << "rank = 1, row = " << row << "   [" << __FILE__ << ":" << __LINE__ << "]" << std::endl;
+//            }
+            LO size = indices.size();
+            if (size>0) {
+                Array<GO> indicesLocal;
+                Array<SC> valuesLocal;
+                for (LO j=0; j<size; j++) {
+                    //if (localIndex>=0) {
+                    LO colIndex = globalMatrix->getRowMap()->getLocalElement(globalMatrix->getColMap()->getGlobalElement(indices[j]));
+                    if (colIndex >= 0) {
+                    //if (values[j] != 0.0) {
+                        //indicesLocal.push_back(indices[j]);
+                        indicesLocal.push_back(colIndex);
+                        valuesLocal.push_back(values[j]);
+//                        if (map->getComm()->getRank() == 1) {
+//                            std::cout << "col = " << colIndex << "(" << globalMatrix->getColMap()->getGlobalElement(indices[j]) << ")[" << values[j] << "]" << std::endl;
+//                        }
+                    }
+                }
+                localSubdomainMatrix->insertGlobalValues(row,indicesLocal(),valuesLocal());
+            }
+        }
+        localSubdomainMatrix->fillComplete();
+
+
+    //const int numRows = (int)matrix_in->getLocalNumRows();
+    //for (int row = 0; row < numRows; row++) {
+        /*
+
+        Teuchos::Array<global_ordinal_type> column_global_ids;//(indices.size());     // global column ids list
+        Teuchos::Array<Scalar> column_scalar_values;//(values.size());         // scalar values for each column
+
+        Teuchos::Array<global_ordinal_type> column_ids;//(indices.size());     // global column ids list
+        for (int i = 0; i < (int)indices.size(); i++) {
+          //if (values[i] != 0) { // [JK] how to get around that?!
+            column_ids.push_back(indices[i]);
+            column_global_ids.push_back(matrix_in->getColMap()->getGlobalElement(indices[i]));
+            column_scalar_values.push_back(values[i]);
+          //}
+        }
+
+        GO global_row_id = matrix_in->getRowMap()->getGlobalElement(row);
+        //yyy->insertGlobalValues(global_row_id,column_global_ids,column_scalar_values);  // [JK] why does this not work?
+        matrix_out->sumIntoGlobalValues(global_row_id, column_global_ids, column_scalar_values);
+    //}
+*/
+
+        return localSubdomainMatrix.getConst();
+    }
+
+    template <class SC,class LO,class GO,class NO>
     RCP<const Matrix<SC,LO,GO,NO> > ExtractLocalSubdomainMatrix(RCP<const Matrix<SC,LO,GO,NO> > globalMatrix,
                                                                 RCP<const Map<LO,GO,NO> > map)
     {
@@ -482,8 +557,11 @@ namespace FROSch {
                             indicesI.push_back(tmp2);
                             valuesI.push_back(values[j]);
                         } else {
-                            indicesJ.push_back(mapJ->getLocalElement(colMap->getGlobalElement(indices[j])));
-                            valuesJ.push_back(values[j]);
+                            tmp2 = mapJ->getLocalElement(colMap->getGlobalElement(indices[j]));
+                            if (tmp2 >= 0) {
+                                indicesJ.push_back(tmp2);
+                                valuesJ.push_back(values[j]);
+                            }
                         }
                     }
                     kII->insertGlobalValues(tmp1,indicesI(),valuesI());
@@ -496,8 +574,11 @@ namespace FROSch {
                             indicesI.push_back(tmp2);
                             valuesI.push_back(values[j]);
                         } else {
-                            indicesJ.push_back(mapJ->getLocalElement(colMap->getGlobalElement(indices[j])));
-                            valuesJ.push_back(values[j]);
+                            tmp2 = mapJ->getLocalElement(colMap->getGlobalElement(indices[j]));
+                            if (tmp2 >= 0) {
+                                indicesJ.push_back(tmp2);
+                                valuesJ.push_back(values[j]);
+                            }
                         }
                     }
                     kJI->insertGlobalValues(tmp1,indicesI(),valuesI());
@@ -516,7 +597,7 @@ namespace FROSch {
 
 
     template <class SC,class LO,class GO,class NO>
-    int BuildSubmatrix(RCP<Matrix<SC,LO,GO,NO> > k,
+    int BuildSubmatrix(RCP<const Matrix<SC,LO,GO,NO> > k,
                        ArrayView<GO> indI,
                        RCP<Matrix<SC,LO,GO,NO> > &kII)
     {
@@ -524,19 +605,30 @@ namespace FROSch {
         const GO INVALID = Teuchos::OrdinalTraits<GO>::invalid();
         //RCP<FancyOStream> fancy = fancyOStream(rcpFromRef(cout));
         RCP<Map<LO,GO,NO> > mapI = MapFactory<LO,GO,NO>::Build(k->getRowMap()->lib(),INVALID,indI(),0,k->getRowMap()->getComm());
+        RCP<Map<LO,GO,NO> > mapILocal = MapFactory<LO,GO,NO>::Build(k->getRowMap()->lib(),INVALID,indI.size(),0,k->getRowMap()->getComm());
 
-        kII = MatrixFactory<SC,LO,GO,NO>::Build(mapI,min((LO) k->getGlobalMaxNumRowEntries(),(LO) indI.size()));
-        GO maxGID = mapI->getMaxAllGlobalIndex();
-        GO minGID = mapI->getMinAllGlobalIndex();
-        for (unsigned i=0; i<k->getLocalNumRows(); i++) {
+        kII = MatrixFactory<SC,LO,GO,NO>::Build(mapILocal,min((LO) k->getGlobalMaxNumRowEntries(),(LO) indI.size()));
+        //GO maxGID = mapI->getMaxAllGlobalIndex();
+        //GO minGID = mapI->getMinAllGlobalIndex();
+        for (LO i=0; i<(LO)mapI->getLocalNumElements(); i++) {
             ArrayView<const LO> indices;
             ArrayView<const SC> values;
 
-            k->getLocalRowView(i,indices,values);
+            const LO indexInSubdomain = mapI->getGlobalElement(i);
+            k->getLocalRowView(indexInSubdomain,indices,values);
 
             Array<GO> indicesI;
             Array<SC> valuesI;
 
+            for (LO j=0; j<indices.size(); j++) {
+                const LO indexInExtractedMatrix = mapI->getLocalElement(indices[j]);
+                if (indexInExtractedMatrix != INVALID) {
+                    indicesI.push_back(indexInExtractedMatrix);
+                    valuesI.push_back(values[j]);
+                }
+            }
+            kII->insertGlobalValues(i,indicesI(),valuesI());
+/*
             LO tmp1=mapI->getLocalElement(k->getRowMap()->getGlobalElement(i));
             GO tmp2=0;
             if (tmp1>=0) {
@@ -549,8 +641,9 @@ namespace FROSch {
                 }
                 kII->insertGlobalValues(mapI->getGlobalElement(tmp1),indicesI(),valuesI());
             }
+*/
         }
-        kII->fillComplete(mapI,mapI);
+        kII->fillComplete(mapILocal,mapILocal);
 
         return 0;
     }

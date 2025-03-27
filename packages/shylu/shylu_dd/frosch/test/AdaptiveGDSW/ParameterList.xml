@@ -1,0 +1,10 @@
+<ParameterList name="Eigen Solver Example">
+    <Parameter name="Solver Type" type="string" value="LAPACK"/>
+    <ParameterList name="Solver Types">
+        <ParameterList name="LAPACK">
+            <Parameter name="Check symmetry" type="bool" value="no"/>
+        </ParameterList> <!-- LAPACK -->
+    </ParameterList>
+</ParameterList>
+
+
