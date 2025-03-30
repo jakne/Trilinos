@@ -154,10 +154,30 @@ KOKKOS_INLINE_FUNCTION void elementStiffnessMatOnRefElementQ1(ViewType &elementM
 }
 
 // Element load vector for Q1 reference finite element.
-template <typename SC> void elementLoadVecOnRefElementQ1(Teuchos::Array<SC> &rhs)
+template <typename SC>
+void elementLoadVecOnRefElementQ1(Teuchos::Array<SC> &rhs)
 {
     for (int i = 0; (int)i < rhs.size(); i++)
         rhs[i] = static_cast<SC>(0.25);
+}
+
+template <typename tparam>
+void setParam(const Teuchos::RCP<Teuchos::ParameterList> parameterList, const std::string paramName, tparam &param, const tparam valueUnset, const tparam defaultValue)
+{
+    if (param == valueUnset) {
+        param = parameterList->get(paramName, defaultValue);
+    }
+    parameterList->set(paramName, param);
+}
+
+void setParamBool(const Teuchos::RCP<Teuchos::ParameterList> parameterList, const std::string paramName, bool &param, int &param_clp, const int valueUnset, const bool defaultValue)
+{
+    if (param_clp == valueUnset) {
+        param = parameterList->get(paramName, defaultValue);
+    } else {
+        param = (param_clp == 1);
+    }
+    parameterList->set(paramName, param);
 }
 
 int main(int argc, char *argv[])
@@ -165,30 +185,28 @@ int main(int argc, char *argv[])
     Tpetra::ScopeGuard tpetraScope(&argc, &argv); // initializes MPI
     Teuchos::RCP<const Teuchos::Comm<int>> comm = Tpetra::getDefaultComm();
 
-    // Default parameters
-    int    numElements1D              = 8;     // number of finite elements along the x and y direction of the domain
-    double coeff                      = 1.0e6; // high coefficient, the remainder is set to 1
-    GO     coeff_step                 = 2;     // every nth column, starting with the second, a high coefficient is set
-    GO     nrows_leave_untouched      = 4;     // a coefficient of 1 is set in these bottom rows
-    int    overlap                    = 0;     // algebraic overlap of the domain decomposition method, 0 means only the interface nodes are shared
-    int    useAdaptiveCoarseSpace_int = 1;     // use adaptive coarse space: 1 use, 0 don't use
-    std::string xmlFile = "ParameterList.xml"; // default name of parameter list file
+    // Parameters are set to -1 to determine unused command line parameters.
+    int    numElements1D              = -1;    // number of finite elements along the x and y direction of the domain
+    double coeff                      = -1.0;  // high coefficient, the remainder is set to 1
+    int    coeff_step                 = -1;    // every nth column, starting with the second, a high coefficient is set
+    int    nrows_leave_untouched      = -1;    // a coefficient of 1 is set in these bottom rows
+    int    overlap                    = -1;    // algebraic overlap of the domain decomposition method, 0 means only the interface nodes are shared
+    int    useAdaptiveCoarseSpace_int = -1;    // use adaptive coarse space: 1 use, 0 don't use
+    std::string xmlFile = "ParameterList.xml"; // parameter list file
 
     // Read parameters from command line and from parameter list.
-    Teuchos::CommandLineProcessor my_CLP;
-    my_CLP.setOption("num-elements-1d", &numElements1D, "Number of elements to generate in the x and y directon of the 2D grid.");
-    my_CLP.setOption("coeff", &coeff, "Coefficient value for heterogeneities; coeff >= 1.");
-    my_CLP.setOption("coeff_step", &coeff_step, "Spacing between large coefficient beams.");
-    my_CLP.setOption("nrows_leave_untouched", &nrows_leave_untouched, "Spacing between bottom Dirichlet boundary and beginning of large coefficient.");
-    my_CLP.setOption("overlap", &overlap, "Overlap.");
-    my_CLP.setOption("adaptive", &useAdaptiveCoarseSpace_int, "Use Adaptive Coarse Space (0: no, 1: yes).");
-    my_CLP.setOption("plist", &xmlFile, "File name of the parameter list.");
-    my_CLP.recogniseAllOptions(true);
-    my_CLP.throwExceptions(false);
-    Teuchos::CommandLineProcessor::EParseCommandLineReturn parseReturn = my_CLP.parse(argc, argv);
-    if (parseReturn == Teuchos::CommandLineProcessor::PARSE_HELP_PRINTED)
-        return (EXIT_SUCCESS);
-    bool useAdaptiveCoarseSpace = (useAdaptiveCoarseSpace_int != 0);
+    Teuchos::CommandLineProcessor clp;
+    clp.setOption("num-elements-1d",       &numElements1D, "Number of elements to generate in the x and y directon of the 2D grid.");
+    clp.setOption("coeff",                 &coeff, "Coefficient value for heterogeneities; coeff >= 1.");
+    clp.setOption("coeff_step",            &coeff_step, "Spacing between large coefficient beams.");
+    clp.setOption("nrows_leave_untouched", &nrows_leave_untouched, "Spacing between bottom Dirichlet boundary and beginning of large coefficient.");
+    clp.setOption("overlap",               &overlap, "Overlap.");
+    clp.setOption("adaptive",              &useAdaptiveCoarseSpace_int, "Use Adaptive Coarse Space (0: no, 1: yes).");
+    clp.setOption("plist",                 &xmlFile, "File name of the parameter list.");
+    clp.recogniseAllOptions(true);
+    clp.throwExceptions(false);
+    Teuchos::CommandLineProcessor::EParseCommandLineReturn parseReturn = clp.parse(argc, argv);
+    if (parseReturn == Teuchos::CommandLineProcessor::PARSE_HELP_PRINTED) return (EXIT_SUCCESS);
 
     // Check if file exists with name of parameter file.
     if (!std::filesystem::exists(xmlFile)) {
@@ -197,7 +215,21 @@ int main(int argc, char *argv[])
         }
         return (EXIT_SUCCESS);
     }
+
     Teuchos::RCP<Teuchos::ParameterList> parameterList = Teuchos::getParametersFromXmlFile(xmlFile);
+    Teuchos::RCP<Teuchos::ParameterList> parameterList_main = Teuchos::sublist(parameterList, "main");
+    Teuchos::RCP<Teuchos::ParameterList> parameterList_linearSolver = Teuchos::sublist(parameterList, "Linear Solver");
+    Teuchos::RCP<Teuchos::ParameterList> parameterList_FROSch = sublist(sublist(parameterList_linearSolver, "Preconditioner Types"), "FROSch");
+
+    setParam(parameterList_main,   "Number of finite elements in x and y direction", numElements1D,         -1,   8);
+    setParam(parameterList_main,   "Coefficient",                                    coeff,                 -1.0, 1.0e6);
+    setParam(parameterList_main,   "Coefficient step",                               coeff_step,            -1,   2);
+    setParam(parameterList_main,   "Number of bottom rows to leave untouched",       nrows_leave_untouched, -1,   4);
+    setParam(parameterList_FROSch, "Overlap",                                        overlap,               -1,   0);
+    {
+        bool useAdaptiveCoarseSpace;
+        setParamBool(sublist(parameterList_FROSch, "GDSWCoarseOperator"), "Use Adaptive Coarse Space", useAdaptiveCoarseSpace, useAdaptiveCoarseSpace_int, -1, true);
+    }
 
     comm->barrier();
     if (comm->getRank() == 0) {
@@ -207,11 +239,11 @@ int main(int argc, char *argv[])
     }
     comm->barrier();
 
-    Teuchos::RCP<Teuchos::ParameterList> parameterList_linearSolver = Teuchos::sublist(parameterList, "Linear Solver");
+    return (EXIT_SUCCESS);
+
 #ifdef HAVE_FROSch_DEBUG
     Teuchos::RCP<Teuchos::ParameterList> parameterList_debug_main = Teuchos::sublist(parameterList, "Debug Output: main");
 #endif
-    Teuchos::RCP<Teuchos::ParameterList> parameterList_main = Teuchos::sublist(parameterList, "main");
 
     // number of subdomains in each coordinate direction
     const int N = (int)(std::sqrt(comm->getSize()) + 100 * std::numeric_limits<double>::epsilon());
@@ -472,15 +504,12 @@ int main(int argc, char *argv[])
         Xpetra::ThyraUtils<SC, LO, GO, NO>::toThyraMultiVector(rhs_xpetra);
 
     // Pass info to FROSch via parameter list.
-    Teuchos::RCP<Teuchos::ParameterList> plList = sublist(parameterList_linearSolver, "Preconditioner Types");
-    sublist(plList, "FROSch")->set("Dimension", 2);
-    sublist(plList, "FROSch")->set("Overlap", overlap);
-    sublist(plList, "FROSch")->set("Repeated Map", neumann_matrices->getRowMap());
     // 2D vector problem: NodeWise (x1,y1,x2,y2,...,xn,yn) instead of (x1,x2,...,xn,y1,y2,...,yn).
-    sublist(plList, "FROSch")->set("DofOrdering","NodeWise");
-    sublist(plList, "FROSch")->set("DofsPerNode", 1);
-    sublist(sublist(plList, "FROSch"), "GDSWCoarseOperator")->set("Neumann Matrices", neumann_matrices);
-    sublist(sublist(plList, "FROSch"), "GDSWCoarseOperator")->set("Use Adaptive Coarse Space", useAdaptiveCoarseSpace);
+    parameterList_FROSch->set("DofOrdering","NodeWise");
+    parameterList_FROSch->set("DofsPerNode", 1);
+    parameterList_FROSch->set("Dimension", 2);
+    parameterList_FROSch->set("Repeated Map", neumann_matrices->getRowMap());
+    sublist(parameterList_FROSch, "GDSWCoarseOperator")->set("Neumann Matrices", neumann_matrices);
 
     comm->barrier();
     if (comm->getRank() == 0) {

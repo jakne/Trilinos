@@ -13,6 +13,9 @@
     </ParameterList>
 
     <ParameterList name="main">
+        <Parameter name="Number of finite elements in x and y direction"            type="int"      value="8"/>
+        <Parameter name="Coefficient"                                               type="double"   value="1.0e6"/>
+        <Parameter name="Coefficient step"                                          type="int"      value="2"/>
         <Parameter name="Export subdomain meshes to mesh_i.txt"                     type="bool"     value="false"/>
         <Parameter name="Export stiffness matrix to fem_matrix.txt"                 type="bool"     value="false"/>
         <Parameter name="Export load vector to fem_rhs.txt"                         type="bool"     value="false"/>
@@ -58,6 +61,7 @@
         <ParameterList name="Preconditioner Types">                                 <!-- Linear Solver/Preconditioner Types -->
             <ParameterList name="FROSch">                                           <!-- Linear Solver/Preconditioner Types/FROSch -->
                 <Parameter name="FROSch Preconditioner Type"                        type="string"   value="GDSWPreconditioner"/> <!-- "OneLevelPreconditioner", "GDSWPreconditioner", ... -->
+                <Parameter name="Overlap"                                           type="int"      value="0"/>
 
                 <ParameterList name="AlgebraicOverlappingOperator">                 <!-- Linear Solver/Preconditioner Types/FROSch/AlgebraicOverlappingOperator -->
                     <Parameter name="Combine Values in Overlap"                     type="string"   value="Full"/>  <!-- "Restricted", "Averaging", "Full" -->
@@ -68,6 +72,8 @@
                 </ParameterList>
 
                 <ParameterList name="GDSWCoarseOperator">                           <!-- Linear Solver/Preconditioner Types/FROSch/GDSWCoarseOperator -->
+                    <Parameter name="Use Adaptive Coarse Space"                     type="bool"     value="false"/>
+
                     <ParameterList name="Blocks">                                   <!-- Linear Solver/Preconditioner Types/FROSch/GDSWCoarseOperator/Blocks -->
                         <ParameterList name="1">
                             <Parameter name="Use For Coarse Space"                  type="bool"     value="true"/>
