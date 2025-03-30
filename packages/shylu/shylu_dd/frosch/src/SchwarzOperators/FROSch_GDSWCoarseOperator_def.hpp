@@ -674,7 +674,7 @@ namespace FROSch {
                                     //Teuchos::RCP< Teuchos::SerialDenseMatrix< LO, SC > > matrixB_ptr = FROSch::convert_LocalSquareXMatrix_to_SerialDenseMatrix(k_ee.getConst());
                                     Teuchos::RCP< Teuchos::SerialDenseMatrix< LO, SC > > matrixB_ptr = FROSch::convert_LocalSquareXMatrix_to_SerialDenseMatrix(repeatedMatrixKee__);
 			    
-                                    Teuchos::RCP<Teuchos::ParameterList> parameterList_eigenSolver = Teuchos::sublist(this->ParameterList_, "Eigen Solver");
+                                    Teuchos::RCP<Teuchos::ParameterList> parameterList_adaptiveProblems = Teuchos::sublist(this->ParameterList_, "Adaptive problems");
 
                                     // TODO: It should not be necessary to create an object for the eigensolver.
                                     using Matrix_Dense_ptr = Teuchos::RCP< Teuchos::SerialDenseMatrix< LO, SC > >;
@@ -682,12 +682,13 @@ namespace FROSch {
                                         FROSch::EigenSolverFactory< SC, LO, GO, NO, Matrix_Dense_ptr, Matrix_Dense_ptr >::Build(
                                             schur_ptr,
                                             matrixB_ptr,
-                                            parameterList_eigenSolver,
+                                            parameterList_adaptiveProblems,
                                             eigenvalues_ptr,
                                             eigenvectors_ptr);
-
+                                    
+                                    const double tol = parameterList_adaptiveProblems->get("Tolerance for the selection of functions", 0.01);
                                     for (LO kk = 0; kk < (LO)eigenvalues_ptr->size(); kk++) {
-                                        if ((*eigenvalues_ptr)[kk] < 0.03) {
+                                        if ((*eigenvalues_ptr)[kk] < tol) {
                                             numEigVecToSelect += 1;
                                             sel.push_back(kk);
                                         }

@@ -72,8 +72,6 @@
                 </ParameterList>
 
                 <ParameterList name="GDSWCoarseOperator">                           <!-- Linear Solver/Preconditioner Types/FROSch/GDSWCoarseOperator -->
-                    <Parameter name="Use Adaptive Coarse Space"                     type="bool"     value="false"/>
-
                     <ParameterList name="Blocks">                                   <!-- Linear Solver/Preconditioner Types/FROSch/GDSWCoarseOperator/Blocks -->
                         <ParameterList name="1">
                             <Parameter name="Use For Coarse Space"                  type="bool"     value="true"/>
@@ -112,7 +110,9 @@
                         <Parameter name="Solver"                                    type="string"   value="Klu"/>
                     </ParameterList>
 
-                    <ParameterList name="Eigen Solver">                             <!-- Linear Solver/Preconditioner Types/FROSch/GDSWCoarseOperator/Eigen Solver -->
+                    <Parameter name="Use Adaptive Coarse Space"                     type="bool"     value="true"/>
+                    <ParameterList name="Adaptive problems">                        <!-- Linear Solver/Preconditioner Types/FROSch/GDSWCoarseOperator/Adaptive problems -->
+                        <Parameter name="Tolerance for the selection of functions"  type="double"   value="0.03"/>
                         <Parameter name="Solver Type"                               type="string"   value="LAPACK"/>
                         <ParameterList name="Solver Types">
                             <ParameterList name="LAPACK">
