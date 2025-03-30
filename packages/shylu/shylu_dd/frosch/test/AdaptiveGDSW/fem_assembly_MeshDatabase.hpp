@@ -1,7 +1,16 @@
-#ifndef TPETRAEXAMPLES_FEM_ASSEMBLY_MESHDATABASE_HPP
-#define TPETRAEXAMPLES_FEM_ASSEMBLY_MESHDATABASE_HPP
+// @HEADER
+// *****************************************************************************
+//          Tpetra: Templated Linear Algebra Services Package
+//
+// Copyright 2008 NTESS and the Tpetra contributors.
+// SPDX-License-Identifier: BSD-3-Clause
+// *****************************************************************************
+// @HEADER
 
-// This file was taken and adapted from the Tpetra FECrs example.
+#ifndef FROSCHEXAMPLES_ADAPTIVE_GDSW_MESHDATABASE_HPP
+#define FROSCHEXAMPLES_ADAPTIVE_GDSW_MESHDATABASE_HPP
+
+// This file was taken and adapted from the Tpetra FECrs example "Finite-Element-Assembly".
 
 #include <fstream>
 #include <iostream>
@@ -432,4 +441,4 @@ template <typename GO, typename NO> void MeshDatabase<GO, NO>::exportToFiles(std
     }
 }
 
-#endif // TPETRAEXAMPLES_FEM_ASSEMBLY_MESH_DATABASE
+#endif // FROSCHEXAMPLES_ADAPTIVE_GDSW_MESHDATABASE_HPP

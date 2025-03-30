@@ -1,11 +1,20 @@
+// @HEADER
+// *****************************************************************************
+//          Tpetra: Templated Linear Algebra Services Package
+//
+// Copyright 2008 NTESS and the Tpetra contributors.
+// SPDX-License-Identifier: BSD-3-Clause
+// *****************************************************************************
+// @HEADER
+
 /*
  * Adaptive GDSW Test Problem
  *
  * Quickstart:
  * 1) nonadaptive
- * mpirun -np 9 --oversubscribe ./ShyLU_DDFROSch_Diffusion_Heterogeneous.exe --num-elements-1d=60 --coeff=1000000.0 --coeff_step=2 --nrows_leave_untouched=10 --overlap=0 --plist=ParameterList_GDSWPreconditioner.xml --adaptive=0
+ * mpirun -np 9 --oversubscribe ./ShyLU_DDFROSch_Diffusion_Heterogeneous.exe --num-elements-1d=60 --coeff=1000000.0 --coeff_step=2 --nrows_leave_untouched=10 --overlap=0 --plist=ParameterList.xml --adaptive=0
  * 2) adaptive
- * mpirun -np 9 --oversubscribe ./ShyLU_DDFROSch_Diffusion_Heterogeneous.exe --num-elements-1d=60 --coeff=1000000.0 --coeff_step=2 --nrows_leave_untouched=10 --overlap=0 --plist=ParameterList_GDSWPreconditioner.xml --adaptive=1
+ * mpirun -np 9 --oversubscribe ./ShyLU_DDFROSch_Diffusion_Heterogeneous.exe --num-elements-1d=60 --coeff=1000000.0 --coeff_step=2 --nrows_leave_untouched=10 --overlap=0 --plist=ParameterList.xml --adaptive=1
  *
  * Description:
  * 2D diffusion problem, finite-element discretization with bilinear basis functions, square domain,
@@ -23,12 +32,12 @@
  *                              ^
  *                              |
  *                        A___________B
- *                        |           |     
+ *                        |           |
  * Dirichlet boundary --> |           | --> Neumann boundary
  *                        |           |
  *                        |           |
  *                        D___________C
- *                      
+ *
  *                              |
  *                              v
  *                        Dirichlet boundary
@@ -62,6 +71,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <fstream>
+#include <filesystem>
 // #include <mpi.h>
 // #include <cmath>
 // #include <iomanip>
@@ -115,13 +125,16 @@ using NO = Tpetra::Details::DefaultTypes::node_type;
 using std::cout;
 using std::endl;
 
+// Element stiffness matrix for Q1 reference finite element.
+//
+// nodes of Q1 element:
 //
 //    3 ------ 2
 //    |        |
 //    |        |
 //    0 ------ 1
 //
-// Element stiffness matrix for Q1 reference finite element.
+// reference element stiffness matrix:
 //
 //        0   1   2   3
 //       --------------
@@ -155,7 +168,8 @@ int main(int argc, char *argv[]) {
     GO coeff_step = 2;      // every nth column, starting with the second, a high coefficient is set
     GO nrows_leave_untouched = 4; // a coefficient of 1 is set in these bottom rows
     int overlap = 0;        // algebraic overlap of the domain decomposition method, 0 means only the interface nodes are shared
-    std::string xmlFile = "ParameterList.xml"; // TODO: needs to be cleaned up
+    int useAdaptiveCoarseSpace_int = 1; // use adaptive coarse space: 1 use, 0 don't use
+    std::string xmlFile = "ParameterList.xml"; // default name of parameter list file
 
     // Read parameters from command line and from parameter list.
     Teuchos::CommandLineProcessor my_CLP;
@@ -164,7 +178,6 @@ int main(int argc, char *argv[]) {
     my_CLP.setOption("coeff_step", &coeff_step, "Spacing between large coefficient beams.");
     my_CLP.setOption("nrows_leave_untouched", &nrows_leave_untouched, "Spacing between bottom Dirichlet boundary and beginning of large coefficient.");
     my_CLP.setOption("overlap", &overlap, "Overlap.");
-    int useAdaptiveCoarseSpace_int = 1;
     my_CLP.setOption("adaptive", &useAdaptiveCoarseSpace_int, "Use Adaptive Coarse Space (0: no, 1: yes).");
     my_CLP.setOption("plist", &xmlFile, "File name of the parameter list.");
     my_CLP.recogniseAllOptions(true);
@@ -172,8 +185,16 @@ int main(int argc, char *argv[]) {
     Teuchos::CommandLineProcessor::EParseCommandLineReturn parseReturn = my_CLP.parse(argc, argv);
     if (parseReturn == Teuchos::CommandLineProcessor::PARSE_HELP_PRINTED)
         return (EXIT_SUCCESS);
-    Teuchos::RCP<Teuchos::ParameterList> parameterList = Teuchos::getParametersFromXmlFile(xmlFile);
     bool useAdaptiveCoarseSpace = (useAdaptiveCoarseSpace_int != 0);
+
+    // Check if file exists with name of parameter file.
+    if (!std::filesystem::exists(xmlFile)) {
+        if (comm->getRank() == 0) {
+            std::cout << "Parameter file not found: " << xmlFile << std::endl;
+        }
+        return (EXIT_SUCCESS);
+    }
+    Teuchos::RCP<Teuchos::ParameterList> parameterList = Teuchos::getParametersFromXmlFile(xmlFile);
 
     comm->barrier();
     if (comm->getRank() == 0) {

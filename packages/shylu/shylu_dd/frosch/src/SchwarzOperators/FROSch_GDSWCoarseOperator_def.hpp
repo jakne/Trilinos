@@ -674,16 +674,15 @@ namespace FROSch {
                                     //Teuchos::RCP< Teuchos::SerialDenseMatrix< LO, SC > > matrixB_ptr = FROSch::convert_LocalSquareXMatrix_to_SerialDenseMatrix(k_ee.getConst());
                                     Teuchos::RCP< Teuchos::SerialDenseMatrix< LO, SC > > matrixB_ptr = FROSch::convert_LocalSquareXMatrix_to_SerialDenseMatrix(repeatedMatrixKee__);
 			    
-                                    const std::string xmlFile = "ParameterList.xml";
-                                    Teuchos::RCP< Teuchos::ParameterList > parameterList = Teuchos::getParametersFromXmlFile(xmlFile);
-        		    
+                                    Teuchos::RCP<Teuchos::ParameterList> parameterList_eigenSolver = Teuchos::sublist(this->ParameterList_, "Eigen Solver");
+
                                     // TODO: It should not be necessary to create an object for the eigensolver.
                                     using Matrix_Dense_ptr = Teuchos::RCP< Teuchos::SerialDenseMatrix< LO, SC > >;
                                     typename FROSch::EigenSolverFactory< SC, LO, GO, NO, Matrix_Dense_ptr , Matrix_Dense_ptr >::EigenSolverPtr ttt = 
                                         FROSch::EigenSolverFactory< SC, LO, GO, NO, Matrix_Dense_ptr, Matrix_Dense_ptr >::Build(
                                             schur_ptr,
                                             matrixB_ptr,
-                                            parameterList,
+                                            parameterList_eigenSolver,
                                             eigenvalues_ptr,
                                             eigenvectors_ptr);
 

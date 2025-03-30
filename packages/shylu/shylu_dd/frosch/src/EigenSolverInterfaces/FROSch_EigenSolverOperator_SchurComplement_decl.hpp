@@ -1,3 +1,12 @@
+// @HEADER
+// *****************************************************************************
+//          Tpetra: Templated Linear Algebra Services Package
+//
+// Copyright 2008 NTESS and the Tpetra contributors.
+// SPDX-License-Identifier: BSD-3-Clause
+// *****************************************************************************
+// @HEADER
+
 #ifndef _FROSCH_EIGENSOLVER_OPERATOR_SCHUR_COMPLEMENT_DECL_HPP
 #define _FROSCH_EIGENSOLVER_OPERATOR_SCHUR_COMPLEMENT_DECL_HPP
 
