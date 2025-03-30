@@ -747,6 +747,9 @@ namespace FROSch {
         return linearDependentVectors;
     }
 
+    /*
+     * @brief Compute extension from interface to the interior of the subdomains.
+    **/
     template <class SC,class LO,class GO,class NO>
     typename HarmonicCoarseOperator<SC,LO,GO,NO>::XMultiVectorPtr HarmonicCoarseOperator<SC,LO,GO,NO>::computeExtensions(ConstXMapPtr localMap,
                                                                                                                          GOView indicesGammaDofsAll,

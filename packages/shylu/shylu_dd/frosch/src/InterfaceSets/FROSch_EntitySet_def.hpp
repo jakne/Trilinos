@@ -81,11 +81,15 @@ namespace FROSch {
         return copy;
     }
 
+    /*
+     * @brief Build a local-to-global map for the interface components (entities) of this entity set.
+    **/
     template<class SC,class LO,class GO,class NO>
     int EntitySet<SC,LO,GO,NO>::buildEntityMap(ConstXMapPtr localToGlobalNodesMap)
     {
         if (!EntityMapIsUpToDate_) {
             LO localNumberEntities = getNumEntities();
+
             LO globalNumberEntities = 0; // AH 10/13/2017: Can we stick with LO here
             LO maxLocalNumberEntities = 0;
             reduceAll(*localToGlobalNodesMap->getComm(),REDUCE_SUM,localNumberEntities,ptr(&globalNumberEntities));

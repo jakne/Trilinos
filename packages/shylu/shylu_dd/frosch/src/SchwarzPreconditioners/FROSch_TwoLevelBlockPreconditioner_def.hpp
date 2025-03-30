@@ -237,9 +237,9 @@ namespace FROSch {
         FROSCH_ASSERT(!repeatedMapVec.is_null(),"repeatedMapVec.is_null() = true. Please provide the repeated maps vector. The maps itself can be null and will be constructed.");
         for (UN i = 0; i < repeatedMapVec.size(); i++) {
             if (repeatedMapVec[i].is_null()) {
-                FROSCH_ASSERT( i==0, "We can only construct a repeated map for a non block system");
+                FROSCH_ASSERT( i==0, "If a repeated map was not provided, we can only construct one automatically for a non block system.");
                 repeatedMapVec[i] = BuildRepeatedMap( this->K_ );
-//                repeatedMapVec[i] = BuildRepeatedMap(this->K_, this->ParameterList_->get("Reduce approx repeated map",true) ); // Todo: Achtung, die UniqueMap könnte unsinnig verteilt sein. Falls es eine repeatedMap gibt, sollte dann die uniqueMap neu gebaut werden können. In diesem Fall, sollte man das aber basierend auf der repeatedNodesMap tun
+//                repeatedMapVec[i] = BuildRepeatedMap(this->K_, this->ParameterList_->get("Reduce approx repeated map",true) ); // Todo: Careful, the UniqueMap could be distributed unreasonably. If a repeatedMap exists, it should be possible to rebuild the uniqueMap. In this case, one should do this based on repeatedNodesMap.
             }
         }
 
@@ -247,7 +247,7 @@ namespace FROSch {
         ConstXMapPtrVecPtr repeatedNodesMapVec;
         if (dofsMapsVec.is_null()) {
             FROSCH_DETAILTIMER_START_LEVELID(buildDofMapsTime,"BuildDofMaps");
-            if (0>BuildDofMapsVec(repeatedMapVec,dofsPerNodeVec,dofOrderingVec,repeatedNodesMapVec,dofsMapsVec)) ret -= 100; // Todo: Rückgabewerte
+            if (0>BuildDofMapsVec(repeatedMapVec,dofsPerNodeVec,dofOrderingVec,repeatedNodesMapVec,dofsMapsVec)) ret -= 100; // Todo: return value
         } else {
             FROSCH_ASSERT(dofsMapsVec.size()==dofsPerNodeVec.size(),"dofsMapsVec.size()!=dofsPerNodeVec.size()");
             for (UN j=0; j<dofsMapsVec.size(); j++) {

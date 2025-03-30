@@ -12,7 +12,6 @@
 
 #include <FROSch_AlgebraicOverlappingOperator_decl.hpp>
 
-
 namespace FROSch {
 
     using namespace std;
@@ -57,7 +56,7 @@ namespace FROSch {
             << " | " << setw(41) << this->ParameterList_->get("Adding Layers Strategy","CrsGraph")
             << " |"
             << "\n" << setw(FROSCH_OUTPUT_INDENT) << " "
-            << "| " << left << setw(41) << "Combine mode in overlap" << right
+            << "| " << left << setw(41) << "Combine values in overlap" << right
             << " | " << setw(41) << this->ParameterList_->get("Combine Values in Overlap","Restricted")
             << " |"
             << "\n" << setw(FROSCH_OUTPUT_INDENT) << " "
@@ -293,7 +292,7 @@ namespace FROSch {
             RCP<Import<LO,GO,NO> > scatter = ImportFactory<LO,GO,NO>::Build(this->OverlappingMatrix_->getRowMap(), this->OverlappingMap_);
             this->subdomainMatrix_->doImport(*(this->OverlappingMatrix_), *scatter, ADD);
 
-            // Used to Map original K_ to overlapping suubdomainMatrix
+            // Used to Map original K_ to overlapping subdomainMatrix
             this->subdomainScatter_ = ImportFactory<LO,GO,NO>::Build(this->K_->getRowMap(), this->OverlappingMap_);
 
             // build local subdomain matrix
