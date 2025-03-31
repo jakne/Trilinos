@@ -63,6 +63,8 @@ namespace FROSch {
                                                              ConstXMapPtrVecPtr2D dofsMapsVec,
                                                              GOVecPtr2D dirichletBoundaryDofsVec)
     {
+        // TODO: [JK] 2025/03 This function and the next are almost identical. The parameters are also the same and only differ in their order. In case two separate functions are required, a substantial amount of duplicate code can probably be moved to a separate function.
+
         FROSCH_TIMER_START_LEVELID(initializeTime,"TwoLevelBlockPreconditioner::initialize");
 
         ////////////
@@ -91,13 +93,13 @@ namespace FROSch {
         ConstXMapPtrVecPtr repeatedNodesMapVec;
         if (dofsMapsVec.is_null()) {
             FROSCH_DETAILTIMER_START_LEVELID(buildDofMapsTime,"BuildDofMaps");
-            if (0>BuildDofMapsVec(repeatedMapVec,dofsPerNodeVec,dofOrderingVec,repeatedNodesMapVec,dofsMapsVec)) ret -= 100; // Todo: Rückgabewerte
+            if (0>BuildDofMapsVec(repeatedMapVec,dofsPerNodeVec,dofOrderingVec,repeatedNodesMapVec,dofsMapsVec)) ret -= 100; // Todo: return value
         } else {
             FROSCH_ASSERT(dofsMapsVec.size()==dofsPerNodeVec.size(),"dofsMapsVec.size()!=dofsPerNodeVec.size()");
-            for (UN j=0; j<dofsMapsVec.size(); j++) {
-                FROSCH_ASSERT(dofsMapsVec[j].size()==dofsPerNodeVec[j],"dofsMapsVec[block].size()!=dofsPerNodeVec[block]");
-                for (UN i=0; i<dofsMapsVec.size(); i++) {
-                    FROSCH_ASSERT(!dofsMapsVec[j][i].is_null(),"dofsMapsVec[block][i].is_null()");
+            for (UN block=0; block<dofsMapsVec.size(); block++) {
+                FROSCH_ASSERT(dofsMapsVec[block].size()==dofsPerNodeVec[block],"dofsMapsVec[block].size()!=dofsPerNodeVec[block]");
+                for (UN i=0; i<dofsMapsVec[block].size(); i++) {
+                    FROSCH_ASSERT(!dofsMapsVec[block][i].is_null(),"dofsMapsVec[block][i].is_null()");
                 }
             }
         }
@@ -250,10 +252,10 @@ namespace FROSch {
             if (0>BuildDofMapsVec(repeatedMapVec,dofsPerNodeVec,dofOrderingVec,repeatedNodesMapVec,dofsMapsVec)) ret -= 100; // Todo: return value
         } else {
             FROSCH_ASSERT(dofsMapsVec.size()==dofsPerNodeVec.size(),"dofsMapsVec.size()!=dofsPerNodeVec.size()");
-            for (UN j=0; j<dofsMapsVec.size(); j++) {
-                FROSCH_ASSERT(dofsMapsVec[j].size()==dofsPerNodeVec[j],"dofsMapsVec[block].size()!=dofsPerNodeVec[block]");
-                for (UN i=0; i<dofsMapsVec[j].size(); i++) {
-                    FROSCH_ASSERT(!dofsMapsVec[j][i].is_null(),"dofsMapsVec[block][i].is_null()");
+            for (UN block=0; block<dofsMapsVec.size(); block++) {
+                FROSCH_ASSERT(dofsMapsVec[block].size()==dofsPerNodeVec[block],"dofsMapsVec[block].size()!=dofsPerNodeVec[block]");
+                for (UN i=0; i<dofsMapsVec[block].size(); i++) {
+                    FROSCH_ASSERT(!dofsMapsVec[block][i].is_null(),"dofsMapsVec[block][i].is_null()");
                 }
             }
             repeatedNodesMapVec = BuildNodeMapsFromDofMaps( dofsMapsVec, dofsPerNodeVec, dofOrderingVec );
