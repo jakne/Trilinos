@@ -15,10 +15,6 @@
 
 namespace FROSch {
 
-    using namespace std;
-    using namespace Teuchos;
-    using namespace Xpetra;
-
     #if defined HAVE_TPETRA_INT_INT
     typedef int DefaultGlobalOrdinal;
     #elif !defined HAVE_TPETRA_INT_LONG_LONG
