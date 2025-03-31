@@ -23,11 +23,11 @@
     </ParameterList>
 
     <ParameterList name="Linear Solver">                                            <!-- Linear Solver -->
-        <Parameter name="Linear Solver Type"                                        type="string"   value="Belos"/>
+        <Parameter name="Linear Solver Type"                                        type="string"   value="Belos"/> <!-- {"Belos","Amesos2"} -->
         <ParameterList name="Linear Solver Types">                                  <!-- Linear Solver/Linear Solver Types -->
             <ParameterList name="Belos">                                            <!-- Linear Solver/Linear Solver Types/Belos -->
                 <Parameter name="Left Preconditioner If Unspecified"                type="bool"     value="true"/>
-                <Parameter name="Solver Type"                                       type="string"   value="Block CG"/> <!-- {"Block GMRES","Block CG"}-->
+                <Parameter name="Solver Type"                                       type="string"   value="Block CG"/> <!-- {"Block GMRES","Block CG"} -->
                 <ParameterList name="Solver Types">
                     <ParameterList name="Block CG">
                         <Parameter name="Convergence Tolerance"                     type="double"   value="1e-6"/>
@@ -55,6 +55,10 @@
                     <Parameter name="Verbosity Level"                               type="string"   value="high"/>  <!-- "none", "medium", "high", "extreme"-->
                 </ParameterList>
             </ParameterList> <!-- Belos -->
+
+            <ParameterList name="Amesos2">                                          <!-- Linear Solver/Linear Solver Types/Amesos2 -->
+                <Parameter name="Solver Type"                                       type="string"   value="KLU2"/>
+            </ParameterList>
         </ParameterList> <!-- Linear Solver Types -->
 
         <Parameter name="Preconditioner Type"                                       type="string"   value="FROSch"/>

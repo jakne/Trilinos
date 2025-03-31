@@ -15,6 +15,34 @@
  * mpirun -np 9 --oversubscribe ./ShyLU_DDFROSch_Diffusion_Heterogeneous.exe --num-elements-1d=60 --coeff=1000000.0 --coeff_step=2 --nrows_leave_untouched=10 --overlap=0 --plist=ParameterList.xml --adaptive=0
  * 2) adaptive
  * mpirun -np 9 --oversubscribe ./ShyLU_DDFROSch_Diffusion_Heterogeneous.exe --num-elements-1d=60 --coeff=1000000.0 --coeff_step=2 --nrows_leave_untouched=10 --overlap=0 --plist=ParameterList.xml --adaptive=1
+ * 3) sparse direct
+ * mpirun -np 9 --oversubscribe ./ShyLU_DDFROSch_Diffusion_Heterogeneous.exe --num-elements-1d=60 --coeff=1000000.0 --coeff_step=2 --nrows_leave_untouched=10 --overlap=0 --plist=ParameterList.xml --directSolver=1
+ *
+ * Parameters + Examples:
+ * --num-elements-1d       = 60
+ *         Default: sqrt(#ranks) * 8
+ *         Number of finite elements in x and y direction
+ * --coeff                 = 1000000.0
+ *         Default: 1.0e6
+ *         Coefficient value in certain parts of the domain (see below); elsewhere it is set to 1.
+ * --coeff_step            = 2
+ *         Default: 2
+ *         Components with high coefficient are set apart by this number (see below).
+ * --nrows_leave_untouched = 4
+ *         Default: 4
+ *         Don't use a high coefficient ("--coeff") in the bottom n number of rows.
+ * --overlap               = 0
+ *         Default: 0
+ *         Algebraic overlap size
+ * --plist                 = ParameterList.xml
+ *         Default: ParameterList.xml
+ *         Filename of parameter list
+ * --directSolver          = 1
+ *         Default: 0
+ *         Use (1) a sparse direct solver. Any other value: User iterative linear solver. If direct solver is used, the adaptive coarse space settings are ignored.
+ * --adaptive              = 1
+ *         Default: 1
+ *         Use (1) an adaptive coarse space. (0) Don't use an adaptive coarse space.
  *
  * Description:
  * 2D diffusion problem, finite-element discretization with bilinear basis functions, square domain,
@@ -185,6 +213,9 @@ int main(int argc, char *argv[])
     Tpetra::ScopeGuard tpetraScope(&argc, &argv); // initializes MPI
     Teuchos::RCP<const Teuchos::Comm<int>> comm = Tpetra::getDefaultComm();
 
+    const int Nx = sqrt(comm->getSize());
+    TEUCHOS_TEST_FOR_EXCEPTION( Nx*Nx != comm->getSize(), std::runtime_error, "Number of subdomains must be the square of an integer.");
+
     // Parameters are set to -1 to determine unused command line parameters.
     int    numElements1D              = -1;    // number of finite elements along the x and y direction of the domain
     double coeff                      = -1.0;  // high coefficient, the remainder is set to 1
@@ -192,6 +223,7 @@ int main(int argc, char *argv[])
     int    nrows_leave_untouched      = -1;    // a coefficient of 1 is set in these bottom rows
     int    overlap                    = -1;    // algebraic overlap of the domain decomposition method, 0 means only the interface nodes are shared
     int    useAdaptiveCoarseSpace_int = -1;    // use adaptive coarse space: 1 use, 0 don't use
+    int    directSolver               = -1;    // use sparse direct solver: 1 use, 0 don't use (ignores adaptive coarse space)
     std::string xmlFile = "ParameterList.xml"; // parameter list file
 
     // Read parameters from command line and from parameter list.
@@ -202,6 +234,7 @@ int main(int argc, char *argv[])
     clp.setOption("nrows_leave_untouched", &nrows_leave_untouched, "Spacing between bottom Dirichlet boundary and beginning of large coefficient.");
     clp.setOption("overlap",               &overlap, "Overlap.");
     clp.setOption("adaptive",              &useAdaptiveCoarseSpace_int, "Use Adaptive Coarse Space (0: no, 1: yes).");
+    clp.setOption("directSolver",          &directSolver, "Use sparse direct solver (0: no, 1: yes).");
     clp.setOption("plist",                 &xmlFile, "File name of the parameter list.");
     clp.recogniseAllOptions(true);
     clp.throwExceptions(false);
@@ -221,7 +254,7 @@ int main(int argc, char *argv[])
     Teuchos::RCP<Teuchos::ParameterList> parameterList_linearSolver = Teuchos::sublist(parameterList, "Linear Solver");
     Teuchos::RCP<Teuchos::ParameterList> parameterList_FROSch = sublist(sublist(parameterList_linearSolver, "Preconditioner Types"), "FROSch");
 
-    setParam(parameterList_main,   "Number of finite elements in x and y direction", numElements1D,         -1,   8);
+    setParam(parameterList_main,   "Number of finite elements in x and y direction", numElements1D,         -1,   Nx*8);
     setParam(parameterList_main,   "Coefficient",                                    coeff,                 -1.0, 1.0e6);
     setParam(parameterList_main,   "Coefficient step",                               coeff_step,            -1,   2);
     setParam(parameterList_main,   "Number of bottom rows to leave untouched",       nrows_leave_untouched, -1,   4);
@@ -230,6 +263,8 @@ int main(int argc, char *argv[])
         bool useAdaptiveCoarseSpace;
         setParamBool(sublist(parameterList_FROSch, "GDSWCoarseOperator"), "Use Adaptive Coarse Space", useAdaptiveCoarseSpace, useAdaptiveCoarseSpace_int, -1, true);
     }
+    if (directSolver == 1) parameterList_linearSolver->set("Linear Solver Type", "Amesos2");
+    else parameterList_linearSolver->set("Linear Solver Type", "Belos");
 
     comm->barrier();
     if (comm->getRank() == 0) {
@@ -238,8 +273,6 @@ int main(int argc, char *argv[])
         cout << endl;
     }
     comm->barrier();
-
-    return (EXIT_SUCCESS);
 
 #ifdef HAVE_FROSch_DEBUG
     Teuchos::RCP<Teuchos::ParameterList> parameterList_debug_main = Teuchos::sublist(parameterList, "Debug Output: main");
@@ -260,10 +293,20 @@ int main(int argc, char *argv[])
     }
     comm->barrier();
 
+    // Check if output folder exists.
+    bool outputFolderExists = std::filesystem::exists("output/");
+    if (!outputFolderExists) {
+        outputFolderExists = std::filesystem::create_directories("./output");
+    }
+
     // Generate structured mesh of rectangles for Q1 finite element discretization.
     MeshDatabase<GO, NO> mesh(comm, numElements1D, numElements1D, N, N);
-    if (parameterList_main->get("Export subdomain meshes to mesh_i.txt", false))
+    if (outputFolderExists && parameterList_main->get("Export subdomain meshes to mesh_i.txt", false)) {
+        std::string cpath = std::filesystem::current_path();
+        std::filesystem::current_path(cpath + "/output");
         mesh.exportToFiles("mesh_");
+        std::filesystem::current_path(cpath);
+    }
 
     comm->barrier();
     if (comm->getRank() == 0)
@@ -454,10 +497,13 @@ int main(int argc, char *argv[])
     Teuchos::RCP<Xpetra::MultiVector<SC, LO, GO, NO>> rhs_xpetra =
         Teuchos::rcp_dynamic_cast<Xpetra::MultiVector<SC, LO, GO, NO>>(rhs_xpetra_tpetra);
 
-    if (parameterList_main->get("Export load vector to fem_rhs.txt", false)) {
+    if (outputFolderExists && parameterList_main->get("Export load vector to fem_rhs.txt", false)) {
         // Unlike a matrix, the multivector is written "unmapped"; that is, it is sorted by local IDs, rank by rank, and not by global IDs.
         // The map (map_fem_rhs.txt) needs to be used to map the values in post. It is exported to map_fem_rhs.txt.
+        std::string cpath = std::filesystem::current_path();
+        std::filesystem::current_path(cpath + "/output");
         Xpetra::IO<SC, LO, GO, NO>::Write("fem_rhs.txt", *rhs_xpetra);
+        std::filesystem::current_path(cpath);
     }
 
     // Convert Tpetra::FECrsMatrix to Xpetra::Matrix.
@@ -469,10 +515,13 @@ int main(int argc, char *argv[])
         Teuchos::rcp_dynamic_cast<Xpetra::CrsMatrix<SC, LO, GO, NO>>(crs_xpetra_tpetra);
     Teuchos::RCP<Xpetra::Matrix<SC, LO, GO, NO>> matrix_xpetra = Teuchos::rcp(new Xpetra::CrsMatrixWrap(crs_xpetra));
 
-    if (parameterList_main->get("Export stiffness matrix to fem_matrix.txt", false)) {
+    if (outputFolderExists && parameterList_main->get("Export stiffness matrix to fem_matrix.txt", false)) {
+        std::string cpath = std::filesystem::current_path();
+        std::filesystem::current_path(cpath + "/output");
         std::ofstream ofs("fem_matrix.txt", std::ofstream::out);
         Tpetra::MatrixMarket::Writer<Tpetra::CrsMatrix<SC, LO, GO, NO>>::writeSparse(ofs, fe_matrix);
         // Xpetra::IO<SC, LO, GO, NO>::Write("fem_matrix.txt", *matrix_xpetra, true);
+        std::filesystem::current_path(cpath);
     }
 
 #ifdef HAVE_FROSch_DEBUG
@@ -555,8 +604,11 @@ int main(int argc, char *argv[])
 
     Thyra::SolveStatus<SC> status = Thyra::solve<SC>(*lows, Thyra::NOTRANS, *rhs_thyra, solution_thyra.ptr());
 
-    if (parameterList_main->get("Export solution to fem_sol.txt", false)) {
+    if (outputFolderExists && parameterList_main->get("Export solution to fem_sol.txt", false)) {
+        std::string cpath = std::filesystem::current_path();
+        std::filesystem::current_path(cpath + "/output");
         Xpetra::IO<SC, LO, GO, NO>::Write("fem_sol.txt", *solution_xpetra); // also writes map_fem_sol.txt
+        std::filesystem::current_path(cpath);
     }
 
     comm->barrier();
