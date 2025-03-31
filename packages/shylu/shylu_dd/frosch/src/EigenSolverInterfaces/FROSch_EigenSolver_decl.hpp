@@ -25,15 +25,15 @@
 namespace FROSch {
 
 
-template < typename SC,// = double,
-           typename LO,// = int,
-           typename GO,// = DefaultGlobalOrdinal,
-           typename NO,// = Tpetra::KokkosClassic::DefaultNode::DefaultNodeType, 
-           typename OpA,
-           typename OpB>
+template <typename OpA,
+          typename OpB,
+          typename SC = Tpetra::Details::DefaultTypes::scalar_type, 
+          typename LO = Tpetra::Details::DefaultTypes::local_ordinal_type, 
+          typename GO = Tpetra::Details::DefaultTypes::global_ordinal_type, 
+          typename NO = Tpetra::Details::DefaultTypes::node_type>
 class EigenSolver {
 
-friend class EigenSolverFactory< SC, LO, GO, NO, OpA, OpB >;
+friend class EigenSolverFactory< OpA, OpB, SC, LO, GO, NO >;
 
 public:
 
@@ -42,15 +42,6 @@ public:
 
   // Virtual destructor for memory safety of derived classes.
   virtual ~EigenSolver() {};
-
-  //! Initialize the internal solver
-//    virtual int initialize() = 0;
-
-  //! Compute the internal solver
-//    virtual int compute() = 0;
-
-  //! Get #IsComputed_
-//    bool isComputed() const;
 
 protected:
 

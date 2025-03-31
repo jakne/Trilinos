@@ -14,12 +14,12 @@
 
 namespace FROSch {
 
-template < typename SC, // = double,                // scalar type
-           typename LO, // = int,                   // local ordinal
-           typename GO, // = DefaultGlobalOrdinal,  // global ordinal
-           typename NO, // = Tpetra::KokkosClassic::DefaultNode::DefaultNodeType >
-	       typename OpA, 
-	       typename OpB >
+template <typename OpA, 
+          typename OpB, 
+          typename SC = Tpetra::Details::DefaultTypes::scalar_type, 
+          typename LO = Tpetra::Details::DefaultTypes::local_ordinal_type,
+          typename GO = Tpetra::Details::DefaultTypes::global_ordinal_type, 
+          typename NO = Tpetra::Details::DefaultTypes::node_type>
 class EigenSolverFactory;
 
 }

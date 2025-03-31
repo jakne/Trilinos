@@ -673,18 +673,17 @@ namespace FROSch {
                                     Teuchos::RCP< Teuchos::SerialDenseMatrix< LO, SC > > schur_ptr = FROSch::convert_LocalSquareXMatrix_to_SerialDenseMatrix(repeatedMatrixS__);
                                     //Teuchos::RCP< Teuchos::SerialDenseMatrix< LO, SC > > matrixB_ptr = FROSch::convert_LocalSquareXMatrix_to_SerialDenseMatrix(k_ee.getConst());
                                     Teuchos::RCP< Teuchos::SerialDenseMatrix< LO, SC > > matrixB_ptr = FROSch::convert_LocalSquareXMatrix_to_SerialDenseMatrix(repeatedMatrixKee__);
-			    
+
                                     Teuchos::RCP<Teuchos::ParameterList> parameterList_adaptiveProblems = Teuchos::sublist(this->ParameterList_, "Adaptive problems");
 
                                     // TODO: It should not be necessary to create an object for the eigensolver.
                                     using Matrix_Dense_ptr = Teuchos::RCP< Teuchos::SerialDenseMatrix< LO, SC > >;
-                                    typename FROSch::EigenSolverFactory< SC, LO, GO, NO, Matrix_Dense_ptr , Matrix_Dense_ptr >::EigenSolverPtr ttt = 
-                                        FROSch::EigenSolverFactory< SC, LO, GO, NO, Matrix_Dense_ptr, Matrix_Dense_ptr >::Build(
-                                            schur_ptr,
-                                            matrixB_ptr,
-                                            parameterList_adaptiveProblems,
-                                            eigenvalues_ptr,
-                                            eigenvectors_ptr);
+                                    FROSch::EigenSolverFactory<Matrix_Dense_ptr , Matrix_Dense_ptr>::Build(
+                                        schur_ptr,
+                                        matrixB_ptr,
+                                        parameterList_adaptiveProblems,
+                                        eigenvalues_ptr,
+                                        eigenvectors_ptr);
                                     
                                     const double tol = parameterList_adaptiveProblems->get("Tolerance for the selection of functions", 0.01);
                                     for (LO kk = 0; kk < (LO)eigenvalues_ptr->size(); kk++) {

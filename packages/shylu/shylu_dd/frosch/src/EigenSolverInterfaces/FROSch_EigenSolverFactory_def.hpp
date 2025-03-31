@@ -25,15 +25,15 @@ namespace Xpetra {
 
 namespace FROSch {
 
-template <typename SC, typename LO, typename GO, typename NO, typename OpA, typename OpB>
-typename EigenSolverFactory<SC, LO, GO, NO, OpA, OpB>::EigenSolverPtr
-EigenSolverFactory<SC, LO, GO, NO, OpA, OpB>::Build(OpA opA,
+template <typename OpA, typename OpB, typename SC, typename LO, typename GO, typename NO>
+typename EigenSolverFactory<OpA, OpB, SC, LO, GO, NO>::EigenSolverPtr
+EigenSolverFactory<OpA, OpB, SC, LO, GO, NO>::Build(OpA opA,
                                                     OpB opB,
                                                     const ParameterListPtr parameterList,
                                                     Teuchos::RCP<std::vector<SC>> &eigenvalues_ptr,
                                                     Teuchos::RCP<Teuchos::SerialDenseMatrix<LO, SC>> &eigenvectors_ptr)
 {
-    EigenSolverFactory<SC, LO, GO, NO, OpA, OpB>::EigenSolverPtr solverPtr;
+    EigenSolverFactory<OpA, OpB, SC, LO, GO, NO>::EigenSolverPtr solverPtr;
 
     // Per default, we use LAPACK as a solver.
     const string solverType = parameterList->get("Solver Type", "LAPACK");
@@ -41,7 +41,7 @@ EigenSolverFactory<SC, LO, GO, NO, OpA, OpB>::Build(OpA opA,
         const ParameterListPtr sublistLAPACK =
             Teuchos::sublist(Teuchos::sublist(parameterList, "Solver Types"), "LAPACK");
         Teuchos::RCP<Teuchos::SerialDenseMatrix<LO, SC>> choleskyFactor_ptr;
-        solverPtr = Teuchos::rcp(new EigenSolver_LAPACK<SC, LO, GO, NO, OpA, OpB>(
+        solverPtr = Teuchos::rcp(new EigenSolver_LAPACK<OpA, OpB, SC, LO, GO, NO>(
             opA, opB, sublistLAPACK, eigenvalues_ptr, eigenvectors_ptr, choleskyFactor_ptr));
     } else if (!solverType.compare("LOBPCG")) {
 #ifdef HAVE_SHYLU_DDFROSCH_ANASAZI
