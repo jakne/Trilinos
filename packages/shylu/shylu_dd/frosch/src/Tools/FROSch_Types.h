@@ -11,9 +11,11 @@
 #define _FROSCH_TYPES_H
 
 #include <ShyLU_DDFROSch_config.h>
-
+#include <Teuchos_RCPDecl.hpp>
 
 namespace FROSch {
+
+    using Teuchos::RCP;
 
     #if defined HAVE_TPETRA_INT_INT
     typedef int DefaultGlobalOrdinal;

@@ -11,17 +11,15 @@
 #define _FROSCH_SUBDOMAINSOLVER_DEF_HPP
 
 #include <FROSch_SubdomainSolver_decl.hpp>
+#include <Xpetra_ThyraUtils.hpp>
+#include <Xpetra_TpetraMultiVector.hpp>
 
 namespace FROSch {
-
-    using namespace std;
-    using namespace Teuchos;
-    using namespace Xpetra;
 
     template<class SC,class LO,class GO,class NO>
     SubdomainSolver<SC,LO,GO,NO>::SubdomainSolver(ConstXMatrixPtr k,
                                                   ParameterListPtr parameterList,
-                                                  string description,
+                                                  std::string description,
                                                   GOVecPtr blockCoarseSize) :
     K_ (k),
     ParameterList_ (parameterList),
@@ -373,12 +371,12 @@ namespace FROSch {
 
         if (!ParameterList_->get("SolverType","Amesos2").compare("Amesos2")) {
             {
-                const TpetraMultiVector<SC,LO,GO,NO> * xTpetraMultiVectorX = dynamic_cast<const TpetraMultiVector<SC,LO,GO,NO> *>(&x);
+                const Xpetra::TpetraMultiVector<SC,LO,GO,NO> * xTpetraMultiVectorX = dynamic_cast<const Xpetra::TpetraMultiVector<SC,LO,GO,NO> *>(&x);
                 TMultiVectorPtr tpetraMultiVectorX = xTpetraMultiVectorX->getTpetra_MultiVector();
 
                 if (YTmp_.is_null()) YTmp_ = XMultiVectorFactory::Build(y.getMap(),x.getNumVectors());
                 *YTmp_ = y;
-                const TpetraMultiVector<SC,LO,GO,NO> * xTpetraMultiVectorY = dynamic_cast<const TpetraMultiVector<SC,LO,GO,NO> *>(YTmp_.get());
+                const Xpetra::TpetraMultiVector<SC,LO,GO,NO> * xTpetraMultiVectorY = dynamic_cast<const Xpetra::TpetraMultiVector<SC,LO,GO,NO> *>(YTmp_.get());
                 TMultiVectorPtr tpetraMultiVectorY = xTpetraMultiVectorY->getTpetra_MultiVector();
 
                 Amesos2SolverTpetra_->setX(tpetraMultiVectorY);
@@ -402,12 +400,12 @@ namespace FROSch {
 #endif
 #ifdef HAVE_SHYLU_DDFROSCH_IFPACK2
         } else if (!ParameterList_->get("SolverType","Amesos2").compare("Ifpack2")) {
-            const TpetraMultiVector<SC,LO,GO,NO> * xTpetraMultiVectorX = dynamic_cast<const TpetraMultiVector<SC,LO,GO,NO> *>(&x);
+            const Xpetra::TpetraMultiVector<SC,LO,GO,NO> * xTpetraMultiVectorX = dynamic_cast<const Xpetra::TpetraMultiVector<SC,LO,GO,NO> *>(&x);
             TMultiVectorPtr tpetraMultiVectorX = xTpetraMultiVectorX->getTpetra_MultiVector();
 
             if (YTmp_.is_null()) YTmp_ = XMultiVectorFactory::Build(y.getMap(),x.getNumVectors());
             *YTmp_ = y;
-            const TpetraMultiVector<SC,LO,GO,NO> * xTpetraMultiVectorY = dynamic_cast<const TpetraMultiVector<SC,LO,GO,NO> *>(YTmp_.get());
+            const Xpetra::TpetraMultiVector<SC,LO,GO,NO> * xTpetraMultiVectorY = dynamic_cast<const Xpetra::TpetraMultiVector<SC,LO,GO,NO> *>(YTmp_.get());
             TMultiVectorPtr tpetraMultiVectorY = xTpetraMultiVectorY->getTpetra_MultiVector();
 
             Ifpack2Preconditioner_->apply(*tpetraMultiVectorX,*tpetraMultiVectorY,mode,alpha,beta);
@@ -480,7 +478,7 @@ namespace FROSch {
     }
 
     template<class SC,class LO,class GO,class NO>
-    string SubdomainSolver<SC,LO,GO,NO>::description() const
+    std::string SubdomainSolver<SC,LO,GO,NO>::description() const
     {
         return "Subdomain Solver"; // Add this->Description_;
     }
