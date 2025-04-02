@@ -7,6 +7,12 @@
 // *****************************************************************************
 // @HEADER
 
+/**
+ * @file
+ * @brief Collection of global functions for extracting submatrices.
+ */
+
+
 #ifndef _FROSCH_EXTRACTSUBMATRICES_DECL_HPP
 #define _FROSCH_EXTRACTSUBMATRICES_DECL_HPP
 
@@ -36,6 +42,11 @@ namespace FROSch {
     locally held row must contain all values of the corresponding subdomain, unlike it is the case for 
     a fillComplete Crs matrix. This is the case if endAssembly (fillComplete) has not yet been called.
 
+    \tparam SC  scalar type
+    \tparam LO  local ordinal
+    \tparam GO  global ordinal
+    \tparam NO  node type
+
     \param[in] globalMatrix  Global finite element matrix (FECrs) before endAssembly was called
     \param[in] map  Map with all indices of the subdomain (i.e., indices on the interface are repeated)
 
@@ -46,10 +57,30 @@ namespace FROSch {
             Teuchos::RCP< const Tpetra::FECrsMatrix<SC,LO,GO,NO> > globalMatrix,
             Teuchos::RCP< const Xpetra::Map<LO,GO,NO> >            map);
 
-    template <class SC,class LO,class GO,class NO>
+    /*!
+    \brief Extract Dirichlet subdomain matrix from global Crs matrix.
+
+    \details
+    The passed matrix is spread across multiple ranks. With the help of the passed map, values of 
+    the current subdomain (rank) are copied over from other ranks. For this to work, the passed 
+    map must be a repeated map, in case the ranks share degrees of freedom on an interface. 
+    In a finite element context, the function extracts the corresponding rows and columns from 
+    the global stiffness matrix to obtain the Dirichlet subdomain matrix.
+
+    \tparam SC  scalar type
+    \tparam LO  local ordinal
+    \tparam GO  global ordinal
+    \tparam NO  node type
+
+    \param[in] globalMatrix  Global matrix
+    \param[in] map  Map with all indices of the subdomain (i.e., indices on the interface are repeated)
+
+    \return Dirichlet subdomain matrix
+    */
+    template <typename SC, typename LO, typename GO, typename NO>
     RCP<const Xpetra::Matrix<SC,LO,GO,NO> > ExtractLocalSubdomainMatrix(
             RCP<const Xpetra::Matrix<SC,LO,GO,NO> > globalMatrix,
-            RCP<const Xpetra::Map<LO,GO,NO> > map);
+            RCP<const Xpetra::Map<LO,GO,NO> >       map);
 
     // ----------------------------------------------------------- //
     // split ExtractLocalSubdomainMatrix into symbolic / compute
@@ -69,7 +100,25 @@ namespace FROSch {
                                              RCP<      Xpetra::Matrix<SC,LO,GO,NO> > repeatedMatrix);
     // ----------------------------------------------------------- //
 
-    template <class SC,class LO,class GO,class NO>
+    /*!
+    \brief Construct subdomain matrix with the same nonzero pattern as the Dirichlet subdomain matrix.
+
+    \details
+    This function essentially does the same as the other ExtractLocalSubdomainMatrix function to 
+    extract the Dirichlet subdomain matrix, but it replaces all nonzero values with a specified value.
+
+    \tparam SC  scalar type
+    \tparam LO  local ordinal
+    \tparam GO  global ordinal
+    \tparam NO  node type
+
+    \param[in] globalMatrix  Global matrix
+    \param[in] map  Map with all indices of the subdomain (i.e., indices on the interface are repeated)
+    \param[in] value  Scalar value to replace all nonzero matrix values with.
+
+    \return Dirichlet subdomain matrix with all nonzero values replaced with a specified value.
+    */
+    template <typename SC, typename LO, typename GO, typename NO>
     RCP<const Xpetra::Matrix<SC,LO,GO,NO> > ExtractLocalSubdomainMatrix(
             RCP<const Xpetra::Matrix<SC,LO,GO,NO> > globalMatrix,
             RCP<const Xpetra::Map<LO,GO,NO> >       map,

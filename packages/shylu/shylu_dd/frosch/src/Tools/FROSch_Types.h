@@ -13,6 +13,10 @@
 #include <ShyLU_DDFROSch_config.h>
 #include <Teuchos_RCPDecl.hpp>
 
+/**
+ * @namespace FROSch
+ * @brief The FROSch namespace contains the [F]ast and [R]obust [O]verlapping [Sch]warz implementation.
+ */
 namespace FROSch {
 
     using Teuchos::RCP;

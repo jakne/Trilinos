@@ -7,6 +7,11 @@
 // *****************************************************************************
 // @HEADER
 
+/**
+ * @file
+ * @brief Collection of global functions for various tasks.
+ */
+
 #ifndef _FROSCH_TOOLS_DECL_HPP
 #define _FROSCH_TOOLS_DECL_HPP
 
@@ -339,24 +344,33 @@ namespace FROSch {
     Teuchos::RCP<Teuchos::SerialDenseMatrix<LO,SC>> convert_LocalSquareXMatrix_to_SerialDenseMatrix(Teuchos::RCP<const Xpetra::Matrix<SC,LO,GO,NO>> matrix_in);
 
 #ifdef HAVE_FROSch_DEBUG
+    /**
+     * @namespace FROSch::debug
+     * @brief The FROSch::debug namespace contains functions that are only available a debug build.
+     * @details For the debug namespace to be included, HAVE_FROSch_DEBUG must be defined, e.g., by passing -DHAVE_FROSch_DEBUG as a compiler flag to GCC.
+     */
     namespace debug {
         /*!
         \brief Print map to terminal.
         
         \details
-        Example: FROSch::debug::printMap(map, "Row Map", __FILE__, __LINE__);
+        Example: \code FROSch::debug::printMap(map, "Row Map", __FILE__, __LINE__);\endcode
 
         Sample output:
+        \verbatim
         Row map of stiffness matrix (local index | global index)  [/home/peter/trilinos/src/packages/shylu/shylu_dd/frosch/test/example/main.cpp:103]
         rank (0): (0|0) (1|1) (2|2) (3|7) (4|8) (5|9) (6|14) (7|15) (8|16) 
         rank (1): (0|3) (1|4) (2|5) (3|6) (4|10) (5|11) (6|12) (7|13) (8|17) (9|18) (10|19) (11|20) 
         rank (2): (0|21) (1|22) (2|23) (3|28) (4|29) (5|30) (6|35) (7|36) (8|37) (9|42) (10|43) (11|44) 
         rank (3): (0|24) (1|25) (2|26) (3|27) (4|31) (5|32) (6|33) (7|34) (8|38) (9|39) (10|40) (11|41) (12|45) (13|46) (14|47) (15|48) 
+        \endverbatim
 
-        \param[in] map Example: RCP<const Xpetra::Map<LO, GO, NO>> or RCP<Tpetra::Map<LO, GO, NO>>
-        \param[in] strInfoToDisplay A string printed out to the console
-        \param[in] file Filename where this function is called from: __FILE__
-        \param[in] line Line number where this function is called from: __LINE__
+        \tparam map_type  `Xpetra::Map<LO,GO,NO>` or `Tpetra::Map<LO,GO,NO>`, either const or nonconst.
+
+        \param[in] map  Map
+        \param[in] strInfoToDisplay  A string printed to the console
+        \param[in] file  Filename where this function is called from: `__FILE__`
+        \param[in] line  Line number where this function is called from: `__LINE__`
         */
         template <typename map_type>
         void printMap(const Teuchos::RCP<map_type> map, const std::string strInfoToDisplay = "", const char* file = 0, const int line = -1);
@@ -365,9 +379,10 @@ namespace FROSch {
         \brief Print Xpetra matrix to terminal, based on what each rank holds, in dense format, i.e., including zeros.
         
         \details
-        Example: FROSch::debug::printXpetraMatrix_local_dense(matrix, "Stiffness matrix", __FILE__, __LINE__);
+        Example: \code FROSch::debug::printXpetraMatrix_local_dense(matrix, "Stiffness matrix", __FILE__, __LINE__);\endcode
 
         Sample output:
+        \verbatim
         Stiffness matrix  [/home/peter/trilinos/src/packages/shylu/shylu_dd/frosch/test/example/main.cpp:103]
         global num rows: 49
         global num cols: 49
@@ -391,22 +406,26 @@ namespace FROSch {
         rank(3) local num rows: 16
         rank(3) local num cols: 25
             *** not showing output ***
+        \endverbatim
 
-        \param[in] M matrix. Example: RCP<const Xpetra::Matrix<SC, LO, GO, NO>> or RCP<Xpetra::Matrix<SC, LO, GO, NO>>. Tpetra::Matrix is not supported.
-        \param[in] strInfoToDisplay A string printed out to the console
-        \param[in] file Filename where this function is called from: __FILE__
-        \param[in] line Line number where this function is called from: __LINE__
+        \tparam matrix_type  `Xpetra::Matrix<SC,LO,GO,NO>`, either const or nonconst.
+
+        \param[in] M  Matrix
+        \param[in] strInfoToDisplay  A string printed out to the console
+        \param[in] file  Filename where this function is called from: `__FILE__`
+        \param[in] line  Line number where this function is called from: `__LINE__`
         */
         template <typename matrix_type>
         void printXpetraMatrix_local_dense(const Teuchos::RCP<matrix_type> M, const std::string strInfoToDisplay = "", const char* file = 0, const int line = -1);
 
         /*!
-        \brief Print Tpetra matrix to terminal, based on what each rank holds, in sparse format.
+        \brief Print Matrix to terminal, based on what each rank holds, in sparse format.
         
         \details
-        Example: FROSch::debug::printTpetraCrsMatrix_local_sparse(matrix, "Stiffness matrix", __FILE__, __LINE__);
+        Usage: Use wrapper functions FROSch::debug::printTpetraCrsMatrix_local_sparse or FROSch::debug::printXpetraMatrix_local_sparse instead.
 
         Sample output:
+        \verbatim
         Row map of stiffness matrix (local index | global index)  [/home/peter/trilinos/src/packages/shylu/shylu_dd/frosch/test/example/main.cpp:103]
 
         Stiffness matrix  [/home/peter/trilinos/src/packages/shylu/shylu_dd/frosch/test/example/main.cpp:103]
@@ -436,16 +455,58 @@ namespace FROSch {
         rank(3) : local num cols: 25
         rank(3) matrix entries: [local row id | global row id] (local column id | global column id | value)
             *** not showing output ***
+        \endverbatim
 
-        \param[in] M matrix. Example: RCP of Tpetra::FECrsMatrix<SC,LO,GO,NO> or Tpetra::CrsMatrix<SC,LO,GO,NO>, either const or nonconst. FECrsMatrix can be printed before endAssembly (fillComplete). Xpetra::Matrix is not supported.
-        \param[in] strInfoToDisplay A string printed out to the console
-        \param[in] file Filename where this function is called from: __FILE__
-        \param[in] line Line number where this function is called from: __LINE__
+        \tparam typeLA  24 for Xpetra or any other integer for Tpetra.
+        \tparam matrix_type  `Tpetra::FECrsMatrix<SC,LO,GO,NO>`, `Tpetra::CrsMatrix<SC,LO,GO,NO>`, or `Xpetra::Matrix<SC,LO,GO,NO>>`, either const or nonconst.
+
+        \param[in] M  Matrix. `Tpetra::FECrsMatrix` can be printed before endAssembly (fillComplete).
+        \param[in] strInfoToDisplay  A string printed out to the console
+        \param[in] file  Filename where this function is called from: `__FILE__`
+        \param[in] line  Line number where this function is called from: `__LINE__`
+        */
+        template <int typeLA, typename matrix_type>
+        void printCrsMatrix_local_sparse(const Teuchos::RCP<matrix_type> M, const std::string strInfoToDisplay, const char* file = 0, const int line = -1);
+
+        /*!
+        \brief Print Tpetra matrix to terminal, based on what each rank holds, in sparse format.
+        
+        \details
+        Example: 
+        \code
+        FROSch::debug::printTpetraCrsMatrix_local_sparse(matrix, "Stiffness matrix", __FILE__, __LINE__);
+        \endcode
+
+        See FROSch::debug::printCrsMatrix_local_sparse for sample output.
+        See also FROSch::debug::printXpetraMatrix_local_sparse.
+
+        \tparam matrix_type  `Tpetra::FECrsMatrix<SC,LO,GO,NO>` or `Tpetra::CrsMatrix<SC,LO,GO,NO>`, either const or nonconst.
+
+        \param[in] M  Matrix. `Tpetra::FECrsMatrix` can be printed before endAssembly (fillComplete).
+        \param[in] strInfoToDisplay  A string printed out to the console
+        \param[in] file  Filename where this function is called from: `__FILE__`
+        \param[in] line  Line number where this function is called from: `__LINE__`
         */
         template <typename matrix_type>
         void printTpetraCrsMatrix_local_sparse(const Teuchos::RCP<matrix_type> M, const std::string strInfoToDisplay = "", const char* file = 0, const int line = -1);
 
-        // TODO: [JK] missing info
+        /*!
+        \brief Print Xpetra matrix to terminal, based on what each rank holds, in sparse format.
+        
+        \details
+        Example: 
+        \code
+        FROSch::debug::printXpetraMatrix_local_sparse(matrix, "Stiffness matrix", __FILE__, __LINE__);
+        \endcode
+
+        See FROSch::debug::printCrsMatrix_local_sparse for sample output.
+        See also FROSch::debug::printTpetraCrsMatrix_local_sparse.
+
+        \param[in] M  Matrix. Example: `RCP<const Xpetra::Matrix<SC, LO, GO, NO>>` or `RCP<Xpetra::Matrix<SC, LO, GO, NO>>`.
+        \param[in] strInfoToDisplay  A string printed out to the console
+        \param[in] file  Filename where this function is called from: `__FILE__`
+        \param[in] line  Line number where this function is called from: `__LINE__`
+        */
         template <typename matrix_type>
         void printXpetraMatrix_local_sparse(const Teuchos::RCP<matrix_type> M, const std::string strInfoToDisplay = "", const char* file = 0, const int line = -1);
     }
