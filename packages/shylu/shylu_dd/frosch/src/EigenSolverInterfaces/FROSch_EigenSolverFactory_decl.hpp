@@ -24,7 +24,7 @@ class EigenSolverFactory {
     using ParameterListPtr = Teuchos::RCP<Teuchos::ParameterList>;
     using EigenSolverPtr = Teuchos::RCP<EigenSolver<OpA, OpB, SC, LO, GO, NO>>;
 
-    static EigenSolverPtr Build(OpA opA,
+    static EigenSolverPtr Solve(OpA opA,
                                 OpB opB,
                                 const ParameterListPtr parameterList,
                                 Teuchos::RCP<std::vector<SC>> &eigenvalues_ptr,

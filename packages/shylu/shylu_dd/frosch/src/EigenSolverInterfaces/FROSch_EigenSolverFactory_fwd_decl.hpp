@@ -10,7 +10,7 @@
 #ifndef _FROSCH_EIGENSOLVER_FACTORY_FWD_DECL_HPP
 #define _FROSCH_EIGENSOLVER_FACTORY_FWD_DECL_HPP
 
-#include <Tpetra_KokkosCompat_DefaultNode.hpp>
+#include <Tpetra_Details_DefaultTypes.hpp>
 
 namespace FROSch {
 

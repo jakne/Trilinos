@@ -19,77 +19,33 @@
 namespace FROSch {
 
     template <typename SC, typename LO, typename GO, typename NO>
-    typename Teuchos::RCP<const Xpetra::Matrix<SC,LO,GO,NO> > ExtractLocalSubdomainMatrix_feTest(
+    typename Teuchos::RCP<const Xpetra::Matrix<SC,LO,GO,NO> > ExtractLocalSubdomainMatrix(
             Teuchos::RCP< const Tpetra::FECrsMatrix<SC,LO,GO,NO> > globalMatrix,
-            Teuchos::RCP< const Xpetra::Map<LO,GO,NO> > map)
+            Teuchos::RCP< const Xpetra::Map<LO,GO,NO> >            map)
     {
-        
-        //RCP<Matrix<SC,LO,GO,NO> > subdomainMatrix = Xpetra::MatrixFactory<SC,LO,GO,NO>::Build(map,globalMatrix->getGlobalMaxNumRowEntries());
-        //RCP<Import<LO,GO,NO> > scatter = Xpetra::ImportFactory<LO,GO,NO>::Build(globalMatrix->getRowMap(),map);
-        /*
-        subdomainMatrix->doImport(*globalMatrix,*scatter,Xpetra::ADD);
-        //cout << *subdomainMatrix << endl;
-        
-        
-        */
-        RCP<const Teuchos::Comm<LO> > SerialComm = Teuchos::rcp(new Teuchos::MpiComm<LO>(MPI_COMM_SELF));
-        RCP<Xpetra::Map<LO,GO,NO> > localSubdomainMap = Xpetra::MapFactory<LO,GO,NO>::Build(map->lib(),map->getLocalNumElements(),0,SerialComm);
-        RCP<Xpetra::Matrix<SC,LO,GO,NO> > localSubdomainMatrix = Xpetra::MatrixFactory<SC,LO,GO,NO>::Build(localSubdomainMap,globalMatrix->getGlobalMaxNumRowEntries());
-        for (unsigned row=0; row<localSubdomainMap->getLocalNumElements(); row++) {
+
+        Teuchos::RCP<const Teuchos::Comm<LO>> SerialComm = Teuchos::rcp(new Teuchos::MpiComm<LO>(MPI_COMM_SELF));
+        Teuchos::RCP<Xpetra::Map<LO,GO,NO>> localSubdomainMap = Xpetra::MapFactory<LO,GO,NO>::Build(map->lib(), map->getLocalNumElements(), 0, SerialComm);
+        Teuchos::RCP<Xpetra::Matrix<SC,LO,GO,NO>> localSubdomainMatrix = Xpetra::MatrixFactory<SC,LO,GO,NO>::Build(localSubdomainMap, globalMatrix->getGlobalMaxNumRowEntries());
+        for (unsigned row = 0; row < localSubdomainMap->getLocalNumElements(); row++) {
             typename Tpetra::CrsMatrix<>::local_inds_host_view_type indices;
             typename Tpetra::CrsMatrix<>::values_host_view_type values;
             globalMatrix->getLocalRowView(row,indices,values);
-            //ArrayView<const GO> indices;
-            //ArrayView<const SC> values;
-            //subdomainMatrix->getGlobalRowView(map->getGlobalElement(i),indices,values);
-            
-//            if (map->getComm()->getRank() == 1) {
-//                std::cout << "rank = 1, row = " << row << "   [" << __FILE__ << ":" << __LINE__ << "]" << std::endl;
-//            }
             LO size = indices.size();
-            if (size>0) {
+            if (size > 0) {
                 Teuchos::Array<GO> indicesLocal;
                 Teuchos::Array<SC> valuesLocal;
-                for (LO j=0; j<size; j++) {
-                    //if (localIndex>=0) {
+                for (LO j = 0; j < size; j++) {
                     LO colIndex = globalMatrix->getRowMap()->getLocalElement(globalMatrix->getColMap()->getGlobalElement(indices[j]));
                     if (colIndex >= 0) {
-                    //if (values[j] != 0.0) {
-                        //indicesLocal.push_back(indices[j]);
                         indicesLocal.push_back(colIndex);
                         valuesLocal.push_back(values[j]);
-//                        if (map->getComm()->getRank() == 1) {
-//                            std::cout << "col = " << colIndex << "(" << globalMatrix->getColMap()->getGlobalElement(indices[j]) << ")[" << values[j] << "]" << std::endl;
-//                        }
                     }
                 }
-                localSubdomainMatrix->insertGlobalValues(row,indicesLocal(),valuesLocal());
+                localSubdomainMatrix->insertGlobalValues(row, indicesLocal(), valuesLocal());
             }
         }
         localSubdomainMatrix->fillComplete();
-
-
-    //const int numRows = (int)matrix_in->getLocalNumRows();
-    //for (int row = 0; row < numRows; row++) {
-        /*
-
-        Teuchos::Array<global_ordinal_type> column_global_ids;//(indices.size());     // global column ids list
-        Teuchos::Array<Scalar> column_scalar_values;//(values.size());         // scalar values for each column
-
-        Teuchos::Array<global_ordinal_type> column_ids;//(indices.size());     // global column ids list
-        for (int i = 0; i < (int)indices.size(); i++) {
-          //if (values[i] != 0) { // [JK] how to get around that?!
-            column_ids.push_back(indices[i]);
-            column_global_ids.push_back(matrix_in->getColMap()->getGlobalElement(indices[i]));
-            column_scalar_values.push_back(values[i]);
-          //}
-        }
-
-        GO global_row_id = matrix_in->getRowMap()->getGlobalElement(row);
-        //yyy->insertGlobalValues(global_row_id,column_global_ids,column_scalar_values);  // [JK] why does this not work?
-        matrix_out->sumIntoGlobalValues(global_row_id, column_global_ids, column_scalar_values);
-    //}
-*/
 
         return localSubdomainMatrix.getConst();
     }

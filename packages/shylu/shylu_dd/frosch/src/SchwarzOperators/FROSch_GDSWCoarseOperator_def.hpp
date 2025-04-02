@@ -14,7 +14,7 @@
 
 #include <FROSch_EigenSolver_def.hpp>
 #include <FROSch_EigenSolverFactory_def.hpp>
-#include "Tpetra_FECrsMatrix.hpp"
+#include <Tpetra_FECrsMatrix.hpp>
 
 namespace FROSch {
 
@@ -517,7 +517,7 @@ namespace FROSch {
                             if (fe_matrix == Teuchos::null) {
                                 repeatedMatrix = FROSch::ExtractLocalSubdomainMatrix(this->K_,repeatedMap.getConst());
                             } else {
-                                repeatedMatrix = FROSch::ExtractLocalSubdomainMatrix_feTest(fe_matrix.getConst(),repeatedMap.getConst());
+                                repeatedMatrix = FROSch::ExtractLocalSubdomainMatrix(fe_matrix.getConst(),repeatedMap.getConst());
                             }
 
                             // Extract submatrices
@@ -678,7 +678,7 @@ namespace FROSch {
 
                                     // TODO: It should not be necessary to create an object for the eigensolver.
                                     using Matrix_Dense_ptr = Teuchos::RCP< Teuchos::SerialDenseMatrix< LO, SC > >;
-                                    FROSch::EigenSolverFactory<Matrix_Dense_ptr , Matrix_Dense_ptr>::Build(
+                                    FROSch::EigenSolverFactory<Matrix_Dense_ptr , Matrix_Dense_ptr>::Solve(
                                         schur_ptr,
                                         matrixB_ptr,
                                         parameterList_adaptiveProblems,

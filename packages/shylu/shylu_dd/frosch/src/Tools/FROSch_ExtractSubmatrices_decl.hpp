@@ -28,8 +28,21 @@
 
 namespace FROSch {
 
+    /*!
+    \brief Extract Neumann subdomain matrix from global FECrs matrix before endAssembly (fillComplete) was called.
+
+    \details
+    The passed Finite Element Crs Matrix must hold the Neumann matrices on the individual ranks; i.e., each 
+    locally held row must contain all values of the corresponding subdomain, unlike it is the case for 
+    a fillComplete Crs matrix. This is the case if endAssembly (fillComplete) has not yet been called.
+
+    \param[in] globalMatrix  Global finite element matrix (FECrs) before endAssembly was called
+    \param[in] map  Map with all indices of the subdomain (i.e., indices on the interface are repeated)
+
+    \return Neumann subdomain matrix
+    */
     template <typename SC, typename LO, typename GO, typename NO>
-    typename Teuchos::RCP<const Xpetra::Matrix<SC,LO,GO,NO> > ExtractLocalSubdomainMatrix_feTest(
+    typename Teuchos::RCP< const Xpetra::Matrix<SC,LO,GO,NO> > ExtractLocalSubdomainMatrix(
             Teuchos::RCP< const Tpetra::FECrsMatrix<SC,LO,GO,NO> > globalMatrix,
             Teuchos::RCP< const Xpetra::Map<LO,GO,NO> >            map);
 

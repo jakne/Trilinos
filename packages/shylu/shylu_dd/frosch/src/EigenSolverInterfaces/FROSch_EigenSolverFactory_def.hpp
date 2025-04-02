@@ -27,7 +27,7 @@ namespace FROSch {
 
 template <typename OpA, typename OpB, typename SC, typename LO, typename GO, typename NO>
 typename EigenSolverFactory<OpA, OpB, SC, LO, GO, NO>::EigenSolverPtr
-EigenSolverFactory<OpA, OpB, SC, LO, GO, NO>::Build(OpA opA,
+EigenSolverFactory<OpA, OpB, SC, LO, GO, NO>::Solve(OpA opA,
                                                     OpB opB,
                                                     const ParameterListPtr parameterList,
                                                     Teuchos::RCP<std::vector<SC>> &eigenvalues_ptr,

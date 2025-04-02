@@ -553,7 +553,7 @@ int main(int argc, char *argv[])
         Xpetra::ThyraUtils<SC, LO, GO, NO>::toThyraMultiVector(rhs_xpetra);
 
     // Pass info to FROSch via parameter list.
-    // 2D vector problem: NodeWise (x1,y1,x2,y2,...,xn,yn) instead of (x1,x2,...,xn,y1,y2,...,yn).
+    // 2D vector problem: NodeWise (x1,y1,x2,y2,...,xn,yn) instead of DimensionWise (x1,x2,...,xn,y1,y2,...,yn).
     parameterList_FROSch->set("DofOrdering","NodeWise");
     parameterList_FROSch->set("DofsPerNode", 1);
     parameterList_FROSch->set("Dimension", 2);
