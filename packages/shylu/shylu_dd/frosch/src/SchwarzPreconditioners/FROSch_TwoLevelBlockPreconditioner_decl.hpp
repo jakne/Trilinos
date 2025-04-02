@@ -66,6 +66,11 @@ namespace FROSch {
         TwoLevelBlockPreconditioner(ConstXMatrixPtr k,
                                     ParameterListPtr parameterList);
 
+        // TODO: [JK] 2025/04 1) This "initialize" and the next are ambiguous if the last 5 or 6 default parameters are used.
+        //                    2) These functions hide the virtual initialize functions in the base class.
+        //                       This seems intended -- that they should not be available.
+        //                       The functions of the base class are still available via polymorphism.
+        //                       This hiding of overloaded virtual functions triggers GCC's Woverloaded-virtual.
         int initialize(UN dimension,
                        UNVecPtr dofsPerNodeVec,
                        DofOrderingVecPtr dofOrderingVec,

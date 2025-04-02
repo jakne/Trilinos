@@ -47,6 +47,7 @@ namespace FROSch {
         OneLevelPreconditioner(ConstXMatrixPtr k,
                                ParameterListPtr parameterList);
 
+        // TODO: [JK] 2025/04: "ambiguous overload" This function cannot be used with the default parameter, i.e., initialize(), since the next "initialize" fits this call as well.
         virtual int initialize(bool useDefaultParameters = true);
 
         virtual int initialize(int overlap = -1,
