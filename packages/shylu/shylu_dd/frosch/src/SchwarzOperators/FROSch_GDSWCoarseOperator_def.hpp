@@ -497,9 +497,9 @@ namespace FROSch {
                         if (!useAdaptiveCoarseSpace) {
                             XMultiVectorPtrVecPtr translations = this->computeTranslations(blockId,DDInterface_->getFaces());
                             ConstXMapPtr facesEntityMap = DDInterface_->getFaces()->getEntityMap();
-
+#ifdef HAVE_FROSch_DEBUG
                             FROSch::debug::printMap(facesEntityMap, "facesEntityMap", __FILE__, __LINE__);
-
+#endif
                             for (UN i=0; i<translations.size(); i++) {
                                 this->InterfaceCoarseSpaces_[blockId]->addSubspace(facesEntityMap,null,translations[i]);
                             }

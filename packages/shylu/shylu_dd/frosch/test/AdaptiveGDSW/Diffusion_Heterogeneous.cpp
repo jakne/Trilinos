@@ -109,6 +109,7 @@
 #include <Teuchos_CommandLineProcessor.hpp>
 #include <Teuchos_GlobalMPISession.hpp>
 #include <Teuchos_RCP.hpp>
+#include <Teuchos_StackedTimer.hpp>
 // #include <Teuchos_FancyOStream.hpp>
 // #include <Teuchos_TimeMonitor.hpp>
 // #include <Teuchos_XMLParameterListCoreHelpers.hpp>
@@ -569,6 +570,10 @@ int main(int argc, char *argv[])
     comm->barrier();
 
     comm->barrier();
+    Teuchos::RCP<Teuchos::StackedTimer> stackedTimer = Teuchos::rcp(new Teuchos::StackedTimer("AdaptiveGDSW Diffusion_Heterogeneous Test"));
+    {
+        Teuchos::TimeMonitor::setStackedTimer(stackedTimer);
+    }
     if (comm->getRank() == 0)
         cout << "###################################\n# Stratimikos LinearSolverBuilder "
                 "#\n###################################\n"
@@ -604,6 +609,17 @@ int main(int argc, char *argv[])
 
     Thyra::SolveStatus<SC> status = Thyra::solve<SC>(*lows, Thyra::NOTRANS, *rhs_thyra, solution_thyra.ptr());
 
+    comm->barrier();
+    {
+        stackedTimer->stopBaseTimer();
+        Teuchos::StackedTimer::OutputOptions options;
+        options.num_histogram=3;
+        options.print_warnings = false;
+        options.output_histogram = true;
+        options.output_fraction=true;
+        options.output_minmax = true;
+        stackedTimer->report(std::cout, comm, options);
+    }
     if (outputFolderExists && parameterList_main->get("Export solution to fem_sol.txt", false)) {
         std::string cpath = std::filesystem::current_path();
         std::filesystem::current_path(cpath + "/output");
