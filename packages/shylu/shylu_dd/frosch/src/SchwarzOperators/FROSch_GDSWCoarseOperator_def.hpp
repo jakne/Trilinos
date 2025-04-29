@@ -495,22 +495,25 @@ namespace FROSch {
                         bool useAdaptiveCoarseSpace = this->ParameterList_->get("Use Adaptive Coarse Space",true);
 
                         if (!useAdaptiveCoarseSpace) {
+                            FROSCH_TIMER_START_LEVELID(timeFacesGDSW,"GDSWCoarseOperator::resetCoarseSpaceBlock::GDSW face functions");
                             XMultiVectorPtrVecPtr translations = this->computeTranslations(blockId,DDInterface_->getFaces());
                             ConstXMapPtr facesEntityMap = DDInterface_->getFaces()->getEntityMap();
-#ifdef HAVE_FROSch_DEBUG
-                            FROSch::debug::printMap(facesEntityMap, "facesEntityMap", __FILE__, __LINE__);
-#endif
                             for (UN i=0; i<translations.size(); i++) {
                                 this->InterfaceCoarseSpaces_[blockId]->addSubspace(facesEntityMap,null,translations[i]);
                             }
+                            FROSCH_TIMER_STOP(timeFacesGDSW);
                         } else {
+                            FROSCH_TIMER_START_LEVELID(timeFacesAGDSW,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW face functions");
+                            FROSCH_TIMER_START_LEVELID(timeFacesAGDSW1,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW face functions (1)");
                             XMultiVectorPtrVecPtr translations = XMultiVectorPtrVecPtr(1);
 
                             this->ParameterList_->print();
 
                             Teuchos::RCP< Tpetra::FECrsMatrix<SC,LO,GO,NO> > dummy = Teuchos::null;
                             Teuchos::RCP< Tpetra::FECrsMatrix<SC,LO,GO,NO> > fe_matrix = this->ParameterList_->get("Neumann Matrices",dummy);
+                            FROSCH_TIMER_STOP(timeFacesAGDSW1);
 
+                            FROSCH_TIMER_START_LEVELID(timeFacesAGDSW2,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW face functions (2) Extract subdomain matrix (repeated)");
                             ConstXMapPtr repeatedMap;
                             ConstXMatrixPtr repeatedMatrix;
                             repeatedMap = FROSch::AssembleSubdomainMap(this->NumberOfBlocks_,this->DofsMaps_,this->DofsPerNode_);
@@ -519,8 +522,10 @@ namespace FROSch {
                             } else {
                                 repeatedMatrix = FROSch::ExtractLocalSubdomainMatrix(fe_matrix.getConst(),repeatedMap.getConst());
                             }
+                            FROSCH_TIMER_STOP(timeFacesAGDSW2);
 
-                            // Extract submatrices
+                            FROSCH_TIMER_START_LEVELID(timeFacesAGDSW3,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW face functions (3)");
+                            // List of all local nodes that is used later to extract submatrices
                             const int numEl = nodesMap->getLocalNumElements();
                             std::vector<GO> allLocalNodes(numEl); // not dofs! needs to be changed.
                             for (int ii = 0; ii < numEl; ii++) {
@@ -531,8 +536,12 @@ namespace FROSch {
 
                             XMapPtr serialGammaMap = MapFactory<LO,GO,NO>::Build(this->K_->getRowMap()->lib(),this->GammaDofs_[0].size(),0,this->SerialComm_);
                             //const int numFaces_local = DDInterface_->getFaces()->getNumEntities();
+                            FROSCH_TIMER_STOP(timeFacesAGDSW3);
 
+                            FROSCH_TIMER_START_LEVELID(timeFacesAGDSW4_loopIndividualFaces,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW face functions (4): loop over individual faces");
                             for (int ii = 0; ii < numFaces_global; ii++){
+                                FROSCH_TIMER_START_LEVELID(timeFacesAGDSW_loop_ii,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW face functions: loop ii");
+                                FROSCH_TIMER_START_LEVELID(timeFacesAGDSW_loop_ii_1,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW face functions: loop ii [1]");
                                 const GO INVALID = Teuchos::OrdinalTraits<GO>::invalid();
                                 const LO localEntityID = DDInterface_->getFaces()->getEntityMap()->getLocalElement(ii);
 
@@ -570,6 +579,8 @@ namespace FROSch {
                                 Teuchos::Array<GO> itemNodes__A(0);
                                 XMatrixPtr k_ee;
                                 InterfaceEntityPtr entity_ptr;
+                                FROSCH_TIMER_STOP(timeFacesAGDSW_loop_ii_1);
+                                FROSCH_TIMER_START_LEVELID(timeFacesAGDSW_loop_ii_2,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW face functions: loop ii [2]");
                                 if (localEntityID != INVALID) {
                                     entity_ptr = DDInterface_->getFaces()->getEntity(localEntityID);
     			    
@@ -623,7 +634,7 @@ namespace FROSch {
                                     s_ee__MV->update(ScalarTraits<SC>::one(),*k_ee__MV,  -ScalarTraits<SC>::one(),*k_eR__inv_k_RR__k_Re__MV,  ScalarTraits<SC>::zero());
                                     // s_ee__MV should be the Schur complement with respect to one subdomain.
                                     // It will subsequently be added with the Schur complement from the other subdomain s.t. we obtain the matrix for the eigenvalue problem of the adaptive coarse space.
-        		    
+
                                     // Write Schur complement into global matrix, extract from global Stiffness matrix the values correponding to the interface item.
                                     for (int jj = 0; jj < numFaceNodes; jj++) {
                                         const Array<GO> globalID_jj(1,entity_ptr->getNode(jj).NodeIDGlobal_);
@@ -639,28 +650,25 @@ namespace FROSch {
                                         }
                                     }
                                 }
-        		    
+                                FROSCH_TIMER_STOP(timeFacesAGDSW_loop_ii_2);
+
+                                FROSCH_TIMER_START_LEVELID(timeFacesAGDSW_loop_ii_3,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW face functions: loop ii [3]");
                                 s_ee__ij->fillComplete(this->K_->getMap(),this->K_->getMap());
                                 k_ee__ij->fillComplete(this->K_->getMap(),this->K_->getMap());
-        		    
+                                FROSCH_TIMER_STOP(timeFacesAGDSW_loop_ii_3);
+
+                                FROSCH_TIMER_START_LEVELID(timeFacesAGDSW_loop_ii_4,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW face functions: loop ii [4]");
                                 // Export edge Schur complements.
                                 //Xpetra::IO< SC, LO, GO, NO >::Write("s_ee__ij__e="+std::to_string(ii)+".txt", *s_ee__ij, true);
         		    
                                 Teuchos::RCP< Xpetra::Map<LO,GO,NO> > faceNodeMap = MapFactory<LO,GO,NO>::Build(this->K_->getRowMap()->lib(),INVALID,itemNodes__A(),0,this->MpiComm_);
-        		    
-                                Array<GO> itemNodes__(0);
-                                if (localEntityID != INVALID) {      
-                                    // For each subdomain that contains the interface component:
-                                    // Extract the Schur complement (corresponding to the interface component) from the global sparse matrix.
-                                    for (int jj = 0; jj < numFaceNodes; jj++) {
-                                        itemNodes__.push_back(itemNodes[jj]);
-                                    }
-                                }
-        		    
+
                                 // This does not extract the subdomain matrices but the matrices corresponding to the entity nodes.
                                 ConstXMatrixPtr repeatedMatrixS__ = FROSch::ExtractLocalSubdomainMatrix(s_ee__ij.getConst(),faceNodeMap.getConst());
                                 ConstXMatrixPtr repeatedMatrixKee__ = FROSch::ExtractLocalSubdomainMatrix(k_ee__ij.getConst(),faceNodeMap.getConst());
+                                FROSCH_TIMER_STOP(timeFacesAGDSW_loop_ii_4);
 
+                                FROSCH_TIMER_START_LEVELID(timeFacesAGDSW_loop_ii_5,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW face functions: loop ii [5]");
                                 Teuchos::RCP< std::vector<SC> > eigenvalues_ptr;
                                 Teuchos::RCP< Teuchos::SerialDenseMatrix<LO,SC> > eigenvectors_ptr;
                                 LOVec sel;
@@ -676,7 +684,7 @@ namespace FROSch {
 
                                     Teuchos::RCP<Teuchos::ParameterList> parameterList_adaptiveProblems = Teuchos::sublist(this->ParameterList_, "Adaptive problems");
 
-                                    // TODO: It should not be necessary to create an object for the eigensolver.
+                                    // Solve SchurComplement * x = lambda * B * x.
                                     using Matrix_Dense_ptr = Teuchos::RCP< Teuchos::SerialDenseMatrix< LO, SC > >;
                                     FROSch::EigenSolverFactory<Matrix_Dense_ptr , Matrix_Dense_ptr>::Solve(
                                         schur_ptr,
@@ -704,7 +712,9 @@ namespace FROSch {
                                     commNeighborsOfEntity->barrier();
 */
                                 }
+                                FROSCH_TIMER_STOP(timeFacesAGDSW_loop_ii_5);
 
+                                FROSCH_TIMER_START_LEVELID(timeFacesAGDSW_loop_ii_6,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW face functions: loop ii [6]");
                                 GOVec localToGlobalVector(0);
                                 if (numEigVecToSelect > 0) {
                                     translations[0] = MultiVectorFactory<SC,LO,GO,NO>::Build(serialGammaMap,numEigVecToSelect);
@@ -720,7 +730,12 @@ namespace FROSch {
 
                                 ConstXMapPtr facesEntityMap = MapFactory<LO,GO,NO>::Build(this->K_->getRowMap()->lib(),INVALID,localToGlobalVector(),0,this->MpiComm_);
                                 this->InterfaceCoarseSpaces_[blockId]->addSubspace(facesEntityMap,null,translations[0]);
+                                FROSCH_TIMER_STOP(timeFacesAGDSW_loop_ii_6);
+
+                                FROSCH_TIMER_STOP(timeFacesAGDSW_loop_ii);
                             } // for: iterate over global faces
+                            FROSCH_TIMER_STOP(timeFacesAGDSW4_loopIndividualFaces);
+                            FROSCH_TIMER_STOP(timeFacesAGDSW);
                         }
                     }
 

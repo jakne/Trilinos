@@ -76,6 +76,7 @@
                 </ParameterList>
 
                 <ParameterList name="GDSWCoarseOperator">                           <!-- Linear Solver/Preconditioner Types/FROSch/GDSWCoarseOperator -->
+                    <Parameter name="Skip DetectLinearDependencies"                 type="bool"     value="true"/>
                     <ParameterList name="Blocks">                                   <!-- Linear Solver/Preconditioner Types/FROSch/GDSWCoarseOperator/Blocks -->
                         <ParameterList name="1">
                             <Parameter name="Use For Coarse Space"                  type="bool"     value="true"/>
