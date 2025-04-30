@@ -652,10 +652,12 @@ namespace FROSch {
                                 }
                                 FROSCH_TIMER_STOP(timeFacesAGDSW_loop_ii_2);
 
-                                FROSCH_TIMER_START_LEVELID(timeFacesAGDSW_loop_ii_3,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW face functions: loop ii [3]");
+                                FROSCH_TIMER_START_LEVELID(timeFacesAGDSW_loop_ii_3_1,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW face functions: loop ii [3.1]");
                                 s_ee__ij->fillComplete(this->K_->getMap(),this->K_->getMap());
+                                FROSCH_TIMER_STOP(timeFacesAGDSW_loop_ii_3_1);
+                                FROSCH_TIMER_START_LEVELID(timeFacesAGDSW_loop_ii_3_2,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW face functions: loop ii [3.2]");
                                 k_ee__ij->fillComplete(this->K_->getMap(),this->K_->getMap());
-                                FROSCH_TIMER_STOP(timeFacesAGDSW_loop_ii_3);
+                                FROSCH_TIMER_STOP(timeFacesAGDSW_loop_ii_3_2);
 
                                 FROSCH_TIMER_START_LEVELID(timeFacesAGDSW_loop_ii_4,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW face functions: loop ii [4]");
                                 // Export edge Schur complements.
