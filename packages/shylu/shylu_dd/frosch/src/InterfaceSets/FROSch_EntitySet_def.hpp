@@ -112,16 +112,16 @@ namespace FROSch {
                 //localToGlobalNodesMap->getComm().GatherAll(&(entities->at(0)),&(allEntities->at(0)),maxLocalNumberEntities);
                 gatherAll(*localToGlobalNodesMap->getComm(),maxLocalNumberEntities,entities.getRawPtr(),maxLocalNumberEntities*localToGlobalNodesMap->getComm()->getSize(),allEntities.getRawPtr());
 
-                allEntities.push_back(0); // Um sicherzugehen, dass der erste Eintrag nach sort_unique eine 0 ist.
+                allEntities.push_back(0); // To ensure that the first entry after sort_unique is a zero.
 
                 sortunique(allEntities);
 
                 localToGlobalVector.resize(localNumberEntities);
-                int LocalID;
-                for (UN i=1; i<allEntities.size(); i++) { // Wir fangen bei 1 an, weil wir am Anfang 1 auf die ID addiert haben
-                    LocalID = entityMapping->getLocalElement(allEntities[i]);
-                    if ( LocalID != -1) {
-                        localToGlobalVector[LocalID] = i-1;
+                int localID;
+                for (UN i=1; i<allEntities.size(); i++) { // We begin with i=1, since we have added 1 onto the ID in the beginning.
+                    localID = entityMapping->getLocalElement(allEntities[i]);
+                    if ( localID != -1 ) {
+                        localToGlobalVector[localID] = i-1;
                     }
                 }
 
