@@ -1701,6 +1701,22 @@ namespace FROSch {
     }
 
     template < typename SC, typename LO, typename GO, typename NO > 
+    Teuchos::RCP<Teuchos::SerialDenseMatrix<LO,SC>> convert_GlobalTMultiVector_to_SerialDenseMatrix(
+            Teuchos::RCP<const Tpetra::MultiVector<SC,LO,GO,NO>> vec_in) {
+        using Matrix_Dense_ptr = Teuchos::RCP< Teuchos::SerialDenseMatrix< LO, SC > >;
+        typename Tpetra::MultiVector<SC, LO, GO, NO>::dual_view_type::t_host_const_um v__localHostView = vec_in->getLocalViewHost(Tpetra::Access::ReadOnly);
+        const int numRows = v__localHostView.extent(0);
+        const int numCols = v__localHostView.extent(1);
+        Matrix_Dense_ptr matrix_out = Teuchos::rcp(new Teuchos::SerialDenseMatrix<LO,SC>(numRows,numCols));
+        for (int i = 0; i < numRows; i++) {
+            for (int j = 0; j < numCols; j++) {
+                (*matrix_out)(i,j) = (SC)v__localHostView(i,j);
+            }
+        }
+        return matrix_out;
+    }
+
+    template < typename SC, typename LO, typename GO, typename NO > 
     Teuchos::RCP< Teuchos::SerialDenseMatrix< LO, SC > > convert_LocalSquareXMatrix_to_SerialDenseMatrix(
             Teuchos::RCP< const Xpetra::Matrix<SC,LO,GO,NO> > matrix_in) {
         using Matrix_Dense_ptr = Teuchos::RCP< Teuchos::SerialDenseMatrix< LO, SC > >;
