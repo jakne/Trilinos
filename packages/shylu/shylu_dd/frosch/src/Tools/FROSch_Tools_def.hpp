@@ -909,6 +909,103 @@ namespace FROSch {
     }
 
     template <class LO,class GO,class NO>
+    Teuchos::RCP<Xpetra::Map<LO,GO,NO> > AssembleMapsT(Teuchos::ArrayView<Teuchos::RCP<Teuchos::Array<GO> > > mapVector,
+                                                      Teuchos::ArrayRCP<Teuchos::ArrayRCP<LO>> &partMappings,
+                                                      const Teuchos::RCP< const Teuchos::Comm<int>> &comm)
+    {
+        FROSCH_DETAILTIMER_START(assembleMapsTime,"AssembleMaps");
+        FROSCH_ASSERT(mapVector.size()>0,"Length of mapVector is == 0!");
+        LO i = 0;
+        LO localstart = 0;
+        LO sizetmp = 0;
+        LO size = 0;
+        GO globalstart = 0;
+
+        partMappings = Teuchos::ArrayRCP<Teuchos::ArrayRCP<LO> >(mapVector.size());
+
+        Teuchos::ArrayRCP<GO> assembledMapTmp(0);
+        for (unsigned j=0; j<mapVector.size(); j++) {
+//            sizetmp = mapVector[j]->getLocalNumElements();
+            sizetmp = mapVector[j]->size();
+            partMappings[j] = Teuchos::ArrayRCP<LO>(sizetmp);
+
+            size += sizetmp;
+            assembledMapTmp.resize(size);
+
+            localstart = i;
+            while (i<localstart+sizetmp) {
+                partMappings[j][i-localstart] = i;
+//                assembledMapTmp[i] = globalstart + mapVector[j]->getGlobalElement(i-localstart);
+                assembledMapTmp[i] = globalstart + mapVector[j]->at(i-localstart);
+                i++;
+            }
+            //cout << mapVector[j]->getMaxAllGlobalIndex() << endl;
+            /*
+            globalstart += mapVector[j]->getMaxAllGlobalIndex();
+
+            if (mapVector[0]->lib()==Xpetra::UseEpetra || mapVector[j]->getGlobalNumElements()>0) {
+                globalstart += 1;
+            }
+             */
+
+//            globalstart += std::max(mapVector[j]->getMaxAllGlobalIndex(),(GO)-1)+1; // AH 04/05/2018: mapVector[j]->getMaxAllGlobalIndex() can result in -2147483648 if the map is empty on the process => introducing max(,)
+            globalstart += std::max((GO) mapVector[j]->size(),(GO)-1)+1; // AH 04/05/2018: mapVector[j]->getMaxAllGlobalIndex() can result in -2147483648 if the map is empty on the process => introducing max(,)
+
+            //if (mapVector[j]->getComm()->getRank() == 0) cout << endl << globalstart << endl;
+        }
+
+        const GO INVALID = Teuchos::OrdinalTraits<GO>::invalid();
+        return Xpetra::MapFactory<LO,GO,NO>::Build(Xpetra::UseTpetra,INVALID,assembledMapTmp(),0,comm);
+    }
+
+    template <class LO,class GO,class NO>
+    RCP<Xpetra::Map<LO,GO,NO> > AssembleMapsG(Teuchos::ArrayView<RCP<const Xpetra::Map<LO,GO,NO> > > mapVector,
+                                              Teuchos::ArrayRCP<Teuchos::ArrayRCP<LO> > &partMappings,
+                                              const Teuchos::RCP< const Teuchos::Comm<int>> &comm)
+    {
+        FROSCH_DETAILTIMER_START(assembleMapsTime,"AssembleMaps");
+        FROSCH_ASSERT(mapVector.size()>0,"Length of mapVector is == 0!");
+        LO i = 0;
+        LO localstart = 0;
+        LO sizetmp = 0;
+        LO size = 0;
+        GO globalstart = 0;
+
+        partMappings = Teuchos::ArrayRCP<Teuchos::ArrayRCP<LO> >(mapVector.size());
+
+        Teuchos::ArrayRCP<GO> assembledMapTmp(0);
+        for (unsigned j=0; j<mapVector.size(); j++) {
+            sizetmp = mapVector[j]->getLocalNumElements();
+            partMappings[j] = Teuchos::ArrayRCP<LO>(sizetmp);
+
+            size += sizetmp;
+            assembledMapTmp.resize(size);
+
+            localstart = i;
+            while (i<localstart+sizetmp) {
+                partMappings[j][i-localstart] = i;
+                assembledMapTmp[i] = globalstart + mapVector[j]->getGlobalElement(i-localstart);
+                i++;
+            }
+            //cout << mapVector[j]->getMaxAllGlobalIndex() << endl;
+            /*
+            globalstart += mapVector[j]->getMaxAllGlobalIndex();
+
+            if (mapVector[0]->lib()==Xpetra::UseEpetra || mapVector[j]->getGlobalNumElements()>0) {
+                globalstart += 1;
+            }
+             */
+
+            globalstart += std::max(mapVector[j]->getMaxAllGlobalIndex(),(GO)-1)+1; // AH 04/05/2018: mapVector[j]->getMaxAllGlobalIndex() can result in -2147483648 if the map is empty on the process => introducing max(,)
+
+            //if (mapVector[j]->getComm()->getRank() == 0) cout << endl << globalstart << endl;
+        }
+
+        const GO INVALID = Teuchos::OrdinalTraits<GO>::invalid();
+        return Xpetra::MapFactory<LO,GO,NO>::Build(mapVector[0]->lib(),INVALID,assembledMapTmp(),0,comm);
+    }
+
+    template <class LO,class GO,class NO>
     RCP<Xpetra::Map<LO,GO,NO> > AssembleMaps(Teuchos::ArrayView<RCP<const Xpetra::Map<LO,GO,NO> > > mapVector,
                                      Teuchos::ArrayRCP<Teuchos::ArrayRCP<LO> > &partMappings)
     {

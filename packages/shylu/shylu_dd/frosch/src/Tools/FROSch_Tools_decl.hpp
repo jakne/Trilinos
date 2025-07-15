@@ -232,6 +232,16 @@ namespace FROSch {
                                      Teuchos::ArrayRCP<Teuchos::ArrayRCP<LO> > &partMappings);
 
     template <class LO,class GO,class NO>
+    RCP<Xpetra::Map<LO,GO,NO> > AssembleMapsG(Teuchos::ArrayView<RCP<const Xpetra::Map<LO,GO,NO> > > mapVector,
+                                              Teuchos::ArrayRCP<Teuchos::ArrayRCP<LO> > &partMappings,
+					      const Teuchos::RCP< const Teuchos::Comm<int>> &comm);
+
+    template <class LO,class GO,class NO>
+    Teuchos::RCP<Xpetra::Map<LO,GO,NO> > AssembleMapsT(Teuchos::ArrayView<Teuchos::RCP<Teuchos::Array<GO>>> mapVector,
+						      Teuchos::ArrayRCP<Teuchos::ArrayRCP<LO>> &partMappings,
+						      const Teuchos::RCP< const Teuchos::Comm<int>> &comm);
+
+    template <class LO,class GO,class NO>
     RCP<Xpetra::Map<LO,GO,NO> > AssembleMapsNonConst(Teuchos::ArrayView<RCP<Xpetra::Map<LO,GO,NO> > > mapVector,
                                                      Teuchos::ArrayRCP<Teuchos::ArrayRCP<LO> > &partMappings);
 

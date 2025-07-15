@@ -503,6 +503,11 @@ namespace FROSch {
                             }
                             FROSCH_TIMER_STOP(timeFacesGDSW);
                         } else {
+//                            FROSCH_TIMER_START_LEVELID(timeFacesAGDSWp1,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW face functions p[1]");
+//                            ConstXMapPtr facesEntityMap_ = DDInterface_->getFaces()->getEntityMap();
+//                            FROSch::debug::printMap(facesEntityMap_,"facesEntityMap_",__FILE__,__LINE__);
+//                            FROSCH_TIMER_STOP(timeFacesAGDSWp1);
+//			    
                             FROSCH_TIMER_START_LEVELID(timeFacesAGDSW,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW face functions");
                             FROSCH_TIMER_START_LEVELID(timeFacesAGDSW1,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW face functions (1)");
                             XMultiVectorPtrVecPtr translations = XMultiVectorPtrVecPtr(1);
@@ -535,8 +540,32 @@ namespace FROSch {
                             const int numFaces_global = (int)DDInterface_->getFaces()->getEntityMap()->getMaxAllGlobalIndex()+1; // +1 since indices are zero based
 
                             XMapPtr serialGammaMap = MapFactory<LO,GO,NO>::Build(this->K_->getRowMap()->lib(),this->GammaDofs_[0].size(),0,this->SerialComm_);
+//                            FROSch::debug::printMap(serialGammaMap,"serialGammaMap",__FILE__,__LINE__);
                             //const int numFaces_local = DDInterface_->getFaces()->getNumEntities();
                             FROSCH_TIMER_STOP(timeFacesAGDSW3);
+
+			    // Set up sub communicators.
+                            FROSCH_TIMER_START_LEVELID(timeFacesAGDSW32_loopIndividualFaces,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW face functions (3.2): set up sub communicators");
+			    Teuchos::Array<Teuchos::RCP< const Teuchos::Comm<int> >> subcomms(0);
+                            for (int ii = 0; ii < numFaces_global; ii++){
+			        const GO INVALID = Teuchos::OrdinalTraits<GO>::invalid();
+                                const LO localEntityID = DDInterface_->getFaces()->getEntityMap()->getLocalElement(ii);
+
+                                // Create split communicator to those subdomains neighboring the entity and the remaining ones.
+                                const bool isSubdomainNeighborOfEntity = (localEntityID != INVALID);
+
+                                int color;
+                                if (isSubdomainNeighborOfEntity) {
+                                    color = 0;
+                                } else {
+                                    color = 1;
+                                }
+
+                                Teuchos::RCP< const Teuchos::Comm<int> > commNeighborsOfEntity = 
+                                    this->MpiComm_->split(color, this->MpiComm_->getRank());
+				subcomms.push_back(commNeighborsOfEntity);
+			    }
+                            FROSCH_TIMER_STOP(timeFacesAGDSW32_loopIndividualFaces);
 
                             FROSCH_TIMER_START_LEVELID(timeFacesAGDSW4_loopIndividualFaces,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW face functions (4): loop over individual faces");
                             for (int ii = 0; ii < numFaces_global; ii++){
@@ -554,10 +583,15 @@ namespace FROSch {
                                 } else {
                                     color = 1;
                                 }
-                                Teuchos::RCP< const Teuchos::Comm<int> > commNeighborsOfEntity = 
-                                    this->MpiComm_->split(color, this->MpiComm_->getRank());
+                                FROSCH_TIMER_STOP(timeFacesAGDSW_loop_ii_1);
 
+                                FROSCH_TIMER_START_LEVELID(timeFacesAGDSW_loop_ii_12,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW face functions: loop ii [1.2]");
+                                Teuchos::RCP< const Teuchos::Comm<int> > commNeighborsOfEntity = subcomms.at(ii);
+//                                Teuchos::RCP< const Teuchos::Comm<int> > commNeighborsOfEntity = 
+//                                    this->MpiComm_->split(color, this->MpiComm_->getRank());
+                                FROSCH_TIMER_STOP(timeFacesAGDSW_loop_ii_12);
 
+                                FROSCH_TIMER_START_LEVELID(timeFacesAGDSW_loop_ii_13,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW face functions: loop ii [1.3]");
                                 // get number of face nodes
                                 int numFaceNodes = 0;
                                 using InterfaceEntityPtr = typename SchwarzOperator<SC,LO,GO,NO>::InterfaceEntityPtr;
@@ -565,28 +599,31 @@ namespace FROSch {
                                     const InterfaceEntityPtr entity_ptr = DDInterface_->getFaces()->getEntity(localEntityID);
                                     numFaceNodes = entity_ptr->getNumNodes();
                                 }
-                                int maxNumFaceNodes_ranks = 0;
-                                reduceAll(*this->MpiComm_,Teuchos::REDUCE_MAX,numFaceNodes,ptr(&maxNumFaceNodes_ranks));
-                                numFaceNodes = maxNumFaceNodes_ranks;
+//                                int maxNumFaceNodes_ranks = 0;
+//                                reduceAll(*this->MpiComm_,Teuchos::REDUCE_MAX,numFaceNodes,ptr(&maxNumFaceNodes_ranks));
+//                                numFaceNodes = maxNumFaceNodes_ranks;
+                                FROSCH_TIMER_STOP(timeFacesAGDSW_loop_ii_13);
 
                                 // This matrix will later store the local Schur complement.
                                 // This Schur complement is the sum of subdomain-local Schur complements, e.g., S_ee__ij = S_ee_i + S_ee_j for an edge/face in two dimensions.
 //                                XMatrixPtr s_ee__ij = Xpetra::MatrixFactory<SC,LO,GO,NO>::Build(this->K_->getRowMap(),numFaceNodes);
 //                                XMatrixPtr k_ee__ij = Xpetra::MatrixFactory<SC,LO,GO,NO>::Build(this->K_->getRowMap(),numFaceNodes);
-    			    
+
+                                FROSCH_TIMER_START_LEVELID(timeFacesAGDSW_loop_ii_14,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW face functions: loop ii [1.4]");
                                 GOVec indicesR(0);  // R:[r]emaining nodes
 
                                 Teuchos::RCP< Teuchos::SerialDenseMatrix< LO, SC > > schur_ptr;
                                 Teuchos::RCP< Teuchos::SerialDenseMatrix< LO, SC > > matrixB_ptr;
     			    
-                                std::vector<GO> itemNodes(numFaceNodes); // not dofs! needs to be changed.
+                                std::vector<GO> itemNodes(0);//numFaceNodes); // not dofs! needs to be changed.
                                 std::vector<GO> itemNodesGlobalRepeated, itemNodesGlobalUnique;
                                 Teuchos::Array<GO> itemNodes__A(0);
                                 XMatrixPtr k_ee;
                                 InterfaceEntityPtr entity_ptr;
-                                FROSCH_TIMER_STOP(timeFacesAGDSW_loop_ii_1);
+                                FROSCH_TIMER_STOP(timeFacesAGDSW_loop_ii_14);
                                 FROSCH_TIMER_START_LEVELID(timeFacesAGDSW_loop_ii_2,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW face functions: loop ii [2]");
                                 if (localEntityID != INVALID) {
+				    itemNodes.resize(numFaceNodes);
                                     //std::cout << this->MpiComm_->getRank() << std::endl;
                                     //reduceAll(*this->MpiComm_,REDUCE_SUM,localVec[0],ptr(&sumVec[0]));
                                     //int minRankIDofCommunicator = 0; // always zero for sub communicator.
@@ -757,16 +794,16 @@ namespace FROSch {
 //                                k_ee__ij->fillComplete(this->K_->getMap(),this->K_->getMap());
 //                                FROSCH_TIMER_STOP(timeFacesAGDSW_loop_ii_3_2);
 
-                                FROSCH_TIMER_START_LEVELID(timeFacesAGDSW_loop_ii_4,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW face functions: loop ii [4]");
+//                                FROSCH_TIMER_START_LEVELID(timeFacesAGDSW_loop_ii_4,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW face functions: loop ii [4]");
                                 // Export edge Schur complements.
                                 //Xpetra::IO< SC, LO, GO, NO >::Write("s_ee__ij__e="+std::to_string(ii)+".txt", *s_ee__ij, true);
         		    
-                                Teuchos::RCP< Xpetra::Map<LO,GO,NO> > faceNodeMap = MapFactory<LO,GO,NO>::Build(this->K_->getRowMap()->lib(),INVALID,itemNodes__A(),0,this->MpiComm_);
+				//                                Teuchos::RCP< Xpetra::Map<LO,GO,NO> > faceNodeMap = MapFactory<LO,GO,NO>::Build(this->K_->getRowMap()->lib(),INVALID,itemNodes__A(),0,this->MpiComm_);
 
                                 // This does not extract the subdomain matrices but the matrices corresponding to the entity nodes.
 //                                ConstXMatrixPtr repeatedMatrixS__ = FROSch::ExtractLocalSubdomainMatrix(s_ee__ij.getConst(),faceNodeMap.getConst());
 //                                ConstXMatrixPtr repeatedMatrixKee__ = FROSch::ExtractLocalSubdomainMatrix(k_ee__ij.getConst(),faceNodeMap.getConst());
-                                FROSCH_TIMER_STOP(timeFacesAGDSW_loop_ii_4);
+//                                FROSCH_TIMER_STOP(timeFacesAGDSW_loop_ii_4);
 
                                 FROSCH_TIMER_START_LEVELID(timeFacesAGDSW_loop_ii_5,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW face functions: loop ii [5]");
                                 Teuchos::RCP< std::vector<SC> > eigenvalues_ptr;
@@ -819,28 +856,64 @@ namespace FROSch {
                                 }
                                 FROSCH_TIMER_STOP(timeFacesAGDSW_loop_ii_5);
 
-                                FROSCH_TIMER_START_LEVELID(timeFacesAGDSW_loop_ii_6,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW face functions: loop ii [6]");
-                                GOVec localToGlobalVector(0);
-                                if (numEigVecToSelect > 0) {
-                                    translations[0] = MultiVectorFactory<SC,LO,GO,NO>::Build(serialGammaMap,numEigVecToSelect);
-                                    for (int eigfn = 0; eigfn < numEigVecToSelect; eigfn++) {
-                                        for (int j = 0; j < numFaceNodes; j++) {
-                                            translations[0]->replaceLocalValue( entity_ptr->getGammaDofID(j,0), eigfn, (*eigenvectors_ptr)(j,sel[eigfn]) );
+//				if (localEntityID != INVALID) {
+                                    FROSCH_TIMER_START_LEVELID(timeFacesAGDSW_loop_ii_6,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW face functions: loop ii [6]");
+				    Teuchos::RCP<GOVec> localToGlobalVector = Teuchos::rcp(new GOVec(0));
+                                    if (numEigVecToSelect > 0) {
+                                        translations[0] = MultiVectorFactory<SC,LO,GO,NO>::Build(serialGammaMap,numEigVecToSelect);
+                                        for (int eigfn = 0; eigfn < numEigVecToSelect; eigfn++) {
+                                            for (int j = 0; j < numFaceNodes; j++) {
+                                                translations[0]->replaceLocalValue( entity_ptr->getGammaDofID(j,0), eigfn, (*eigenvectors_ptr)(j,sel[eigfn]) );
+                                            }
+                                            localToGlobalVector->push_back(eigfn);
                                         }
-                                        localToGlobalVector.push_back(eigfn);
+                                    } else {
+                                        translations[0] = Teuchos::null;
                                     }
-                                } else {
-                                    translations[0] = Teuchos::null;
-                                }
-
-                                ConstXMapPtr facesEntityMap = MapFactory<LO,GO,NO>::Build(this->K_->getRowMap()->lib(),INVALID,localToGlobalVector(),0,this->MpiComm_);
-                                this->InterfaceCoarseSpaces_[blockId]->addSubspace(facesEntityMap,null,translations[0]);
-                                FROSCH_TIMER_STOP(timeFacesAGDSW_loop_ii_6);
+                                    FROSCH_TIMER_STOP(timeFacesAGDSW_loop_ii_6);
+    
+                                    FROSCH_TIMER_START_LEVELID(timeFacesAGDSW_loop_ii_7,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW face functions: loop ii [7]");
+//                                    ConstXMapPtr facesEntityMap = MapFactory<LO,GO,NO>::Build(this->K_->getRowMap()->lib(),INVALID,*localToGlobalVector(),0,this->MpiComm_);
+//                                    ConstXMapPtr facesEntityMap = MapFactory<LO,GO,NO>::Build(this->K_->getRowMap()->lib(),INVALID,localToGlobalVector(),0,commNeighborsOfEntity);
+//                                    FROSch::debug::printMap(facesEntityMap,"facesEntityMap",__FILE__,__LINE__);
+    				//facesEntityMap
+                                    FROSCH_TIMER_STOP(timeFacesAGDSW_loop_ii_7);
+    
+                                    FROSCH_TIMER_START_LEVELID(timeFacesAGDSW_loop_ii_8,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW face functions: loop ii [8]");
+                                    this->InterfaceCoarseSpaces_[blockId]->addSubspaceT(localToGlobalVector,null,translations[0]);
+//                                    this->InterfaceCoarseSpaces_[blockId]->addSubspace(facesEntityMap,null,translations[0]);
+                                    FROSCH_TIMER_STOP(timeFacesAGDSW_loop_ii_8);
+//                                } else {
+//                                    GOVec localToGlobalVector(0);
+//                                    ConstXMapPtr facesEntityMap = MapFactory<LO,GO,NO>::Build(this->K_->getRowMap()->lib(),INVALID,localToGlobalVector(),0,this->SerialComm_);
+//				    translations[0] = Teuchos::null;
+//				    this->InterfaceCoarseSpaces_[blockId]->addSubspaceT(facesEntityMap,null,translations[0]);;
+//				}
 
                                 FROSCH_TIMER_STOP(timeFacesAGDSW_loop_ii);
                             } // for: iterate over global faces
                             FROSCH_TIMER_STOP(timeFacesAGDSW4_loopIndividualFaces);
                             FROSCH_TIMER_STOP(timeFacesAGDSW);
+
+
+
+                            for (int ii = 0; ii < numFaces_global; ii++){
+                                FROSCH_TIMER_START_LEVELID(timeFacesAGDSW_loop_iiB,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW face functions: loop iiB");
+                                const GO INVALID = Teuchos::OrdinalTraits<GO>::invalid();
+
+                                FROSCH_TIMER_START_LEVELID(timeFacesAGDSW_loop_iiB_7,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW face functions: loop iiB [7]");
+                                Teuchos::RCP<GOVec> localToGlobalVector = this->InterfaceCoarseSpaces_[blockId]->getMapVector(ii);
+                                ConstXMapPtr facesEntityMap = MapFactory<LO,GO,NO>::Build(this->K_->getRowMap()->lib(),INVALID,*localToGlobalVector(),0,this->MpiComm_);
+                                FROSCH_TIMER_STOP(timeFacesAGDSW_loop_iiB_7);
+
+                                FROSCH_TIMER_START_LEVELID(timeFacesAGDSW_loop_iiB_8,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW face functions: loop iiB [8]");
+                                this->InterfaceCoarseSpaces_[blockId]->addSubspaceOnlyMap(facesEntityMap);
+                                FROSCH_TIMER_STOP(timeFacesAGDSW_loop_iiB_8);
+
+                                FROSCH_TIMER_STOP(timeFacesAGDSW_loop_iiB);
+                            } // for: iterate over global faces
+
+
                         }
                     }
 
@@ -853,6 +926,7 @@ namespace FROSch {
                     }
 
                     this->InterfaceCoarseSpaces_[blockId]->assembleCoarseSpace();
+//                    this->InterfaceCoarseSpaces_[blockId]->assembleCoarseSpaceT();
 
                     if (this->Verbose_) {
                         cout
