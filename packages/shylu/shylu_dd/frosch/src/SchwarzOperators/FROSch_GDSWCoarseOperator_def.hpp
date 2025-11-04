@@ -544,11 +544,11 @@ namespace FROSch {
                             //const int numFaces_local = DDInterface_->getFaces()->getNumEntities();
                             FROSCH_TIMER_STOP(timeFacesAGDSW3);
 
-			    // Set up sub communicators.
+                            // Set up sub communicators.
                             FROSCH_TIMER_START_LEVELID(timeFacesAGDSW32_loopIndividualFaces,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW face functions (3.2): set up sub communicators");
-			    Teuchos::Array<Teuchos::RCP< const Teuchos::Comm<int> >> subcomms(0);
+                            Teuchos::Array<Teuchos::RCP< const Teuchos::Comm<int> >> subcomms(0);
                             for (int ii = 0; ii < numFaces_global; ii++){
-			        const GO INVALID = Teuchos::OrdinalTraits<GO>::invalid();
+                                const GO INVALID = Teuchos::OrdinalTraits<GO>::invalid();
                                 const LO localEntityID = DDInterface_->getFaces()->getEntityMap()->getLocalElement(ii);
 
                                 // Create split communicator to those subdomains neighboring the entity and the remaining ones.
@@ -563,8 +563,8 @@ namespace FROSch {
 
                                 Teuchos::RCP< const Teuchos::Comm<int> > commNeighborsOfEntity = 
                                     this->MpiComm_->split(color, this->MpiComm_->getRank());
-				subcomms.push_back(commNeighborsOfEntity);
-			    }
+                                subcomms.push_back(commNeighborsOfEntity);
+                            }
                             FROSCH_TIMER_STOP(timeFacesAGDSW32_loopIndividualFaces);
 
                             FROSCH_TIMER_START_LEVELID(timeFacesAGDSW4_loopIndividualFaces,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW face functions (4): loop over individual faces");

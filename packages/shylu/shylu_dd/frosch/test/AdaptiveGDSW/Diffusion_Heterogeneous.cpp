@@ -613,7 +613,7 @@ int main(int argc, char *argv[])
     {
         stackedTimer->stopBaseTimer();
         Teuchos::StackedTimer::OutputOptions options;
-        options.num_histogram=3;
+        options.num_histogram=10;
         options.print_warnings = false;
         options.output_histogram = true;
         options.output_fraction=true;

@@ -57,7 +57,7 @@
             </ParameterList> <!-- Belos -->
 
             <ParameterList name="Amesos2">                                          <!-- Linear Solver/Linear Solver Types/Amesos2 -->
-                <Parameter name="Solver Type"                                       type="string"   value="KLU2"/>
+                <Parameter name="Solver Type"                                       type="string"   value="KLU2"/>   <!-- KLU2, MUMPS -->
             </ParameterList>
         </ParameterList> <!-- Linear Solver Types -->
 
@@ -71,7 +71,7 @@
                     <Parameter name="Combine Values in Overlap"                     type="string"   value="Full"/>  <!-- "Restricted", "Averaging", "Full" -->
                     <ParameterList name="Solver">
                         <Parameter name="SolverType"                                type="string"   value="Amesos2"/>
-                        <Parameter name="Solver"                                    type="string"   value="Klu"/>
+                        <Parameter name="Solver"                                    type="string"   value="Klu2"/>   <!-- Klu2, MUMPS -->
                     </ParameterList>
                 </ParameterList>
 
@@ -97,7 +97,7 @@
 
                     <ParameterList name="ExtensionSolver">                          <!-- Linear Solver/Preconditioner Types/FROSch/GDSWCoarseOperator/ExtensionSolver -->
                         <Parameter name="SolverType"                                type="string"   value="Amesos2"/>
-                        <Parameter name="Solver"                                    type="string"   value="Klu"/>
+                        <Parameter name="Solver"                                    type="string"   value="Klu2"/>   <!-- Klu2, MUMPS -->
                     </ParameterList>
 
                     <ParameterList name="Distribution">                             <!-- Linear Solver/Preconditioner Types/FROSch/GDSWCoarseOperator/Distribution -->
@@ -112,7 +112,7 @@
 
                     <ParameterList name="CoarseSolver">                             <!-- Linear Solver/Preconditioner Types/FROSch/GDSWCoarseOperator/CoarseSolver -->
                         <Parameter name="SolverType"                                type="string"   value="Amesos2"/>
-                        <Parameter name="Solver"                                    type="string"   value="Klu"/>
+                        <Parameter name="Solver"                                    type="string"   value="Klu2"/>   <!-- Klu2, MUMPS -->
                     </ParameterList>
 
                     <Parameter name="Use Adaptive Coarse Space"                     type="bool"     value="true"/>
