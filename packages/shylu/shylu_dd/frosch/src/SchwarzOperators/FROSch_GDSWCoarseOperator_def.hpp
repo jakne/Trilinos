@@ -561,40 +561,116 @@ namespace FROSch {
                                     color = 1;
                                 }
 
-                                Teuchos::RCP< const Teuchos::Comm<int> > commNeighborsOfEntity = 
-                                    this->MpiComm_->split(color, this->MpiComm_->getRank());
-                                subcomms.push_back(commNeighborsOfEntity);
+//                                Teuchos::RCP< const Teuchos::Comm<int> > commNeighborsOfEntity = 
+//                                    this->MpiComm_->split(color, this->MpiComm_->getRank());
+//                                subcomms.push_back(commNeighborsOfEntity);
                             }
                             FROSCH_TIMER_STOP(timeFacesAGDSW32_loopIndividualFaces);
 
-                            FROSCH_TIMER_START_LEVELID(timeFacesAGDSW4_loopIndividualFaces,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW face functions (4): loop over individual faces");
+                            FROSCH_TIMER_START_LEVELID(timeFacesAGDSW33_loopIndividualFaces,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW face functions (3.3): set up sub communicators - version 2");
+                            using InterfaceEntityPtr = typename SchwarzOperator<SC,LO,GO,NO>::InterfaceEntityPtr;
+                            MPI_Group world_group;
+                            // TODO: Implement as in Teuchos test reduceAllInPlace.cpp (getRawMpiCommFromTeuchosComm)
+                            const Teuchos::MpiComm<int>* mpiCommPtr = dynamic_cast<const Teuchos::MpiComm<int>* > (this->MpiComm_.get());
+                            Teuchos::RCP<const Teuchos::OpaqueWrapper<MPI_Comm> > wrapper = mpiCommPtr->getRawMpiComm();
+                            MPI_Comm rawMpiComm = *wrapper;
+                            MPI_Comm_group(rawMpiComm, &world_group);
                             for (int ii = 0; ii < numFaces_global; ii++){
-                                FROSCH_TIMER_START_LEVELID(timeFacesAGDSW_loop_ii,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW face functions: loop ii");
-                                FROSCH_TIMER_START_LEVELID(timeFacesAGDSW_loop_ii_1,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW face functions: loop ii [1]");
                                 const GO INVALID = Teuchos::OrdinalTraits<GO>::invalid();
                                 const LO localEntityID = DDInterface_->getFaces()->getEntityMap()->getLocalElement(ii);
 
                                 // Create split communicator to those subdomains neighboring the entity and the remaining ones.
                                 const bool isSubdomainNeighborOfEntity = (localEntityID != INVALID);
 
-                                int color;
                                 if (isSubdomainNeighborOfEntity) {
-                                    color = 0;
-                                } else {
-                                    color = 1;
-                                }
-                                FROSCH_TIMER_STOP(timeFacesAGDSW_loop_ii_1);
 
-                                FROSCH_TIMER_START_LEVELID(timeFacesAGDSW_loop_ii_12,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW face functions: loop ii [1.2]");
-                                Teuchos::RCP< const Teuchos::Comm<int> > commNeighborsOfEntity = subcomms.at(ii);
-//                                Teuchos::RCP< const Teuchos::Comm<int> > commNeighborsOfEntity = 
-//                                    this->MpiComm_->split(color, this->MpiComm_->getRank());
-                                FROSCH_TIMER_STOP(timeFacesAGDSW_loop_ii_12);
+                                    const InterfaceEntityPtr entity_ptr = DDInterface_->getFaces()->getEntity(localEntityID);
+
+                                    const typename SchwarzOperator<SC,LO,GO,NO>::IntVec subdomainsVector = entity_ptr->getSubdomainsVector();
+                                    
+//                                    std::cout << "subdomainsVector" << std::endl;
+//                                    commNeighborsOfEntity->barrier();
+//                                    std::this_thread::sleep_for(std::chrono::nanoseconds(50000));
+//                                    for (int ww = 0; ww < subdomainsVector.size(); ww++) {
+//                                        std::cout << commNeighborsOfEntity->getRank() << " | " << subdomainsVector[ww] << std::endl;
+//                                        commNeighborsOfEntity->barrier();
+//                                        std::this_thread::sleep_for(std::chrono::nanoseconds(5000));
+//                                    }
+//                                    commNeighborsOfEntity->barrier();
+//                                    std::this_thread::sleep_for(std::chrono::nanoseconds(50000));
+
+//                                    std::this_thread::sleep_for(std::chrono::nanoseconds(50000));
+                                    int ranks_to_include[subdomainsVector.size()];
+                                    for (int ww = 0; ww < subdomainsVector.size(); ww++) {
+                                        ranks_to_include[ww] = subdomainsVector[ww];
+//                                        std::cout << this->MpiComm_->getRank() << " | " << subdomainsVector[ww] << std::endl;
+                                    }
+//                                    std::this_thread::sleep_for(std::chrono::nanoseconds(50000));
+
+//                                    const int ranks_to_include[] = {1, 3};
+//                                    const int num_ranks = 2;
+                                    int num_ranks = subdomainsVector.size();
+
+                                    MPI_Group new_group;
+                                    MPI_Group_incl(world_group, num_ranks, ranks_to_include, &new_group);
+                                    MPI_Comm new_comm_;
+                                    MPI_Comm_create_group(rawMpiComm, new_group, ii, &new_comm_);
+    
+    //                                Teuchos::RCP<const Teuchos::MpiComm<int>> new_comm = Teuchos::rcp(new const Teuchos::MpiComm(new_comm_));
+    //                                Teuchos::RCP<const Teuchos::MpiComm<int>> comm = Teuchos::rcp<const Teuchos::MpiComm<int>>(new Teuchos::MpiComm<int>(new_comm_));
+                                    Teuchos::RCP<const Teuchos::Comm<int>> commNeighborsOfEntity = Teuchos::rcp(new Teuchos::MpiComm<int>(new_comm_));
+    
+//                                    new_comm->barrier();
+//                                    std::this_thread::sleep_for(std::chrono::nanoseconds(50000));
+//                                    std::cout << "test comm  " << new_comm->getRank() << std::endl;
+//                                    new_comm->barrier();
+//                                    std::this_thread::sleep_for(std::chrono::nanoseconds(50000));
+
+                                    subcomms.push_back(commNeighborsOfEntity);
+                                }
+                            }
+//                            std::this_thread::sleep_for(std::chrono::nanoseconds(50000));
+//                            this->MpiComm_->barrier();
+//                            std::this_thread::sleep_for(std::chrono::nanoseconds(50000));
+//                            std::cout << "subcomms size: " << subcomms.size() << std::endl;
+//                            std::this_thread::sleep_for(std::chrono::nanoseconds(50000));
+//                            this->MpiComm_->barrier();
+//                            std::this_thread::sleep_for(std::chrono::nanoseconds(50000));
+
+//                            if ((this->MpiComm_->getRank() == 1) || (this->MpiComm_->getRank() == 3)) {
+//                                const int ranks_to_include[] = {1, 3};
+//                                const int num_ranks = 2;
+//                                MPI_Group new_group;
+//                                MPI_Group_incl(world_group, num_ranks, ranks_to_include, &new_group);
+//                                MPI_Comm new_comm_;
+//                                MPI_Comm_create_group(rawMpiComm, new_group, 0, &new_comm_);
+//
+////                                Teuchos::RCP<const Teuchos::MpiComm<int>> new_comm = Teuchos::rcp(new const Teuchos::MpiComm(new_comm_));
+////                                Teuchos::RCP<const Teuchos::MpiComm<int>> comm = Teuchos::rcp<const Teuchos::MpiComm<int>>(new Teuchos::MpiComm<int>(new_comm_));
+//                                Teuchos::RCP<const Teuchos::Comm<int>> new_comm = Teuchos::rcp(new Teuchos::MpiComm<int>(new_comm_));
+//
+//                                new_comm->barrier();
+//                                std::this_thread::sleep_for(std::chrono::nanoseconds(50000));
+//                                std::cout << "test comm  " << new_comm->getRank() << std::endl;
+//                                new_comm->barrier();
+//                                std::this_thread::sleep_for(std::chrono::nanoseconds(50000));
+//                            }
+
+                            FROSCH_TIMER_STOP(timeFacesAGDSW33_loopIndividualFaces);
+
+                            FROSCH_TIMER_START_LEVELID(timeFacesAGDSW4_loopIndividualFaces,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW face functions (4): loop over individual faces");
+                            int localFaceID = -1;
+                            for (int ii = 0; ii < numFaces_global; ii++){
+                                FROSCH_TIMER_START_LEVELID(timeFacesAGDSW_loop_ii,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW face functions: loop ii");
+                                FROSCH_TIMER_START_LEVELID(timeFacesAGDSW_loop_ii_1,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW face functions: loop ii [1]");
+                                const GO INVALID = Teuchos::OrdinalTraits<GO>::invalid();
+                                const LO localEntityID = DDInterface_->getFaces()->getEntityMap()->getLocalElement(ii);
+
+                                FROSCH_TIMER_STOP(timeFacesAGDSW_loop_ii_1);
 
                                 FROSCH_TIMER_START_LEVELID(timeFacesAGDSW_loop_ii_13,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW face functions: loop ii [1.3]");
                                 // get number of face nodes
                                 int numFaceNodes = 0;
-                                using InterfaceEntityPtr = typename SchwarzOperator<SC,LO,GO,NO>::InterfaceEntityPtr;
                                 if (localEntityID != INVALID) {
                                     const InterfaceEntityPtr entity_ptr = DDInterface_->getFaces()->getEntity(localEntityID);
                                     numFaceNodes = entity_ptr->getNumNodes();
@@ -623,13 +699,34 @@ namespace FROSch {
                                 FROSCH_TIMER_STOP(timeFacesAGDSW_loop_ii_14);
                                 FROSCH_TIMER_START_LEVELID(timeFacesAGDSW_loop_ii_2,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW face functions: loop ii [2]");
                                 if (localEntityID != INVALID) {
-				    itemNodes.resize(numFaceNodes);
+                                    localFaceID += 1;
+
+                                    // Fetch split communicator to those subdomains neighboring the entity and the remaining ones.
+                                    Teuchos::RCP< const Teuchos::Comm<int> > commNeighborsOfEntity = subcomms.at(localFaceID);
+
+                                    itemNodes.resize(numFaceNodes);
                                     //std::cout << this->MpiComm_->getRank() << std::endl;
                                     //reduceAll(*this->MpiComm_,REDUCE_SUM,localVec[0],ptr(&sumVec[0]));
                                     //int minRankIDofCommunicator = 0; // always zero for sub communicator.
                                     //reduceAll(*commNeighborsOfEntity,Teuchos::REDUCE_MIN,commNeighborsOfEntity->getRank(),ptr(&maxNumFaceNodes_ranks));
 
                                     entity_ptr = DDInterface_->getFaces()->getEntity(localEntityID);
+
+////                                    std::this_thread::sleep_for(std::chrono::nanoseconds(50000));
+////                                    commNeighborsOfEntity->barrier();
+//                                    const typename SchwarzOperator<SC,LO,GO,NO>::IntVec subdomainsVector = entity_ptr->getSubdomainsVector();
+//
+//                                    
+//                                    std::cout << "subdomainsVector" << std::endl;
+//                                    commNeighborsOfEntity->barrier();
+//                                    std::this_thread::sleep_for(std::chrono::nanoseconds(50000));
+//                                    for (int ww = 0; ww < subdomainsVector.size(); ww++) {
+//                                        std::cout << commNeighborsOfEntity->getRank() << " | " << subdomainsVector[ww] << std::endl;
+//                                        commNeighborsOfEntity->barrier();
+//                                        std::this_thread::sleep_for(std::chrono::nanoseconds(5000));
+//                                    }
+//                                    commNeighborsOfEntity->barrier();
+//                                    std::this_thread::sleep_for(std::chrono::nanoseconds(50000));
 
                                     // Get entity nodes.
                                     for (int jj = 0; jj < numFaceNodes; jj++) {
@@ -645,9 +742,18 @@ namespace FROSch {
 //                                    std::this_thread::sleep_for(std::chrono::nanoseconds(50000));
 
                                     if (commNeighborsOfEntity->getRank() == 0) {
-                                        // We select the rank with the smallest ID to the work (here, only sum the contributions of the local Schur complements: S^(i1) + S^(i2) + .... For a face in 3D and an edge in 2D, there are only two adjacent subdomains, so the sub communicator only holds the ranks 0 and 1.
+                                        // We select the rank with the smallest ID to do the work (here, we only take the sum of contributions of the local Schur complements: 
+                                        // S^(i1) + S^(i2) + .... 
+                                        // For a face in 3D and an edge in 2D, there are only two adjacent subdomains, so the sub communicator only holds the ranks 0 and 1.
                                         // This approach may be too simple and a more elaborate load-balancing strategy might be needed.
-                                        // Approach: Since all matrix (local Schur complements) are (AGDSW) defined on the same DOFs, we want sub rank 0 to have them all. The remaining ranks of the sub communicator should hold no DOFs at all.
+                                        // Satisfied conditions:
+                                        // * Different nodes/DOFs of an interface component (edge, face, vertex) have the same set of adjacent subdomains
+                                        //   [would not be true for RAGDSW]
+                                        // * As a result, all local Schur complements S^(i_j) are (in the case of AGDSW) defined on the same DOFs
+                                        // Approach:
+                                        // * We want "sub rank" 0 to have access to all S^(i_j) of the interface component
+                                        // * Then, "sub rank" 0 can take the sum of all S^(i_j) to obtain a Schur complement corresponding to the interface component.
+                                        // * The remaining ranks of the sub communicator should hold no DOFs at all.
                                         itemNodesGlobalUnique = itemNodesGlobalRepeated;
                                     } else {
                                         itemNodesGlobalUnique = {};
@@ -677,7 +783,7 @@ namespace FROSch {
                                     for (int jj = 0; jj < (int)diff.size(); jj++) {
                                         indicesR.push_back(diff[jj]);
                                     }
-    			    
+
                                     XMatrixPtr k_RR;
                                     XMatrixPtr k_Re;
                                     XMatrixPtr k_eR;
