@@ -10,6 +10,8 @@
 #ifndef _FROSCH_TOOLS_DEF_HPP
 #define _FROSCH_TOOLS_DEF_HPP
 
+#include <filesystem>
+
 #include <FROSch_Tools_decl.hpp>
 
 #include <Xpetra_Export.hpp>
@@ -1830,6 +1832,44 @@ namespace FROSch {
         }
         return matrix_out;
     }
+
+    bool createFolder(const std::filesystem::path& folder)
+    {
+        // Check if output folder exists.
+        bool outputFolderExists = std::filesystem::exists("output/");
+        if (!outputFolderExists) {
+            outputFolderExists = std::filesystem::create_directories("./output");
+        }
+
+        return outputFolderExists;
+    }
+
+    // Check whether the passed directory exists, create it if necessary, change into it, and restore old working directory afterwards.
+    // Use as (example)
+    //     {
+    //         FROSch::WorkingDirectoryGuard guard(std::filesystem::current_path() / "output"); // concatenate cwd and subfolder output.
+    //         mesh.exportToFiles("mesh_");
+    //     } // The old working directory is automatically restored here.
+    class WorkingDirectoryGuard {
+    public:
+        explicit WorkingDirectoryGuard(const std::filesystem::path& newPath)
+            : oldPath_(std::filesystem::current_path())
+        {
+            bool outputFolderExists = FROSch::createFolder(newPath);
+            if (outputFolderExists) std::filesystem::current_path(newPath);
+        }
+    
+        // non-copyable (important!)
+        WorkingDirectoryGuard(const WorkingDirectoryGuard&) = delete;
+        WorkingDirectoryGuard& operator=(const WorkingDirectoryGuard&) = delete;
+    
+        ~WorkingDirectoryGuard() noexcept {
+            std::filesystem::current_path(oldPath_);
+        }
+    
+    private:
+        std::filesystem::path oldPath_;
+    };
 
 #ifdef HAVE_FROSch_DEBUG
 namespace debug {  // FROSch::debug

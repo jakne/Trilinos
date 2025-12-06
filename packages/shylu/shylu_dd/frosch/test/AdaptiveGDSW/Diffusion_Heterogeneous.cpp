@@ -294,19 +294,13 @@ int main(int argc, char *argv[])
     }
     comm->barrier();
 
-    // Check if output folder exists.
-    bool outputFolderExists = std::filesystem::exists("output/");
-    if (!outputFolderExists) {
-        outputFolderExists = std::filesystem::create_directories("./output");
-    }
-
     // Generate structured mesh of rectangles for Q1 finite element discretization.
     MeshDatabase<GO, NO> mesh(comm, numElements1D, numElements1D, N, N);
-    if (outputFolderExists && parameterList_main->get("Export subdomain meshes to mesh_i.txt", false)) {
-        std::string cpath = std::filesystem::current_path();
-        std::filesystem::current_path(cpath + "/output");
-        mesh.exportToFiles("mesh_");
-        std::filesystem::current_path(cpath);
+    if (parameterList_main->get("Export subdomain meshes to mesh_i.txt", false)) {
+        {
+            FROSch::WorkingDirectoryGuard guard(std::filesystem::current_path() / "output"); // concatenate cwd and subfolder output.
+            mesh.exportToFiles("mesh_");
+        } // The old working directory is automatically restored here.
     }
 
     comm->barrier();
@@ -498,13 +492,13 @@ int main(int argc, char *argv[])
     Teuchos::RCP<Xpetra::MultiVector<SC, LO, GO, NO>> rhs_xpetra =
         Teuchos::rcp_dynamic_cast<Xpetra::MultiVector<SC, LO, GO, NO>>(rhs_xpetra_tpetra);
 
-    if (outputFolderExists && parameterList_main->get("Export load vector to fem_rhs.txt", false)) {
-        // Unlike a matrix, the multivector is written "unmapped"; that is, it is sorted by local IDs, rank by rank, and not by global IDs.
-        // The map (map_fem_rhs.txt) needs to be used to map the values in post. It is exported to map_fem_rhs.txt.
-        std::string cpath = std::filesystem::current_path();
-        std::filesystem::current_path(cpath + "/output");
-        Xpetra::IO<SC, LO, GO, NO>::Write("fem_rhs.txt", *rhs_xpetra);
-        std::filesystem::current_path(cpath);
+    if (parameterList_main->get("Export load vector to fem_rhs.txt", false)) {
+        {
+            FROSch::WorkingDirectoryGuard guard(std::filesystem::current_path() / "output"); // concatenate cwd and subfolder output.
+            // Unlike a matrix, the multivector is written "unmapped"; that is, it is sorted by local IDs, rank by rank, and not by global IDs.
+            // The map (map_fem_rhs.txt) needs to be used to map the values in post. It is exported to map_fem_rhs.txt.
+            Xpetra::IO<SC, LO, GO, NO>::Write("fem_rhs.txt", *rhs_xpetra);
+        } // The old working directory is automatically restored here.
     }
 
     // Convert Tpetra::FECrsMatrix to Xpetra::Matrix.
@@ -516,13 +510,13 @@ int main(int argc, char *argv[])
         Teuchos::rcp_dynamic_cast<Xpetra::CrsMatrix<SC, LO, GO, NO>>(crs_xpetra_tpetra);
     Teuchos::RCP<Xpetra::Matrix<SC, LO, GO, NO>> matrix_xpetra = Teuchos::rcp(new Xpetra::CrsMatrixWrap(crs_xpetra));
 
-    if (outputFolderExists && parameterList_main->get("Export stiffness matrix to fem_matrix.txt", false)) {
-        std::string cpath = std::filesystem::current_path();
-        std::filesystem::current_path(cpath + "/output");
-        std::ofstream ofs("fem_matrix.txt", std::ofstream::out);
-        Tpetra::MatrixMarket::Writer<Tpetra::CrsMatrix<SC, LO, GO, NO>>::writeSparse(ofs, fe_matrix);
-        // Xpetra::IO<SC, LO, GO, NO>::Write("fem_matrix.txt", *matrix_xpetra, true);
-        std::filesystem::current_path(cpath);
+    if (parameterList_main->get("Export stiffness matrix to fem_matrix.txt", false)) {
+        {
+            FROSch::WorkingDirectoryGuard guard(std::filesystem::current_path() / "output"); // concatenate cwd and subfolder output.
+            std::ofstream ofs("fem_matrix.txt", std::ofstream::out);
+            Tpetra::MatrixMarket::Writer<Tpetra::CrsMatrix<SC, LO, GO, NO>>::writeSparse(ofs, fe_matrix);
+            // Xpetra::IO<SC, LO, GO, NO>::Write("fem_matrix.txt", *matrix_xpetra, true);
+        } // The old working directory is automatically restored here.
     }
 
 #ifdef HAVE_FROSch_DEBUG
@@ -620,11 +614,11 @@ int main(int argc, char *argv[])
         options.output_minmax = true;
         stackedTimer->report(std::cout, comm, options);
     }
-    if (outputFolderExists && parameterList_main->get("Export solution to fem_sol.txt", false)) {
-        std::string cpath = std::filesystem::current_path();
-        std::filesystem::current_path(cpath + "/output");
-        Xpetra::IO<SC, LO, GO, NO>::Write("fem_sol.txt", *solution_xpetra); // also writes map_fem_sol.txt
-        std::filesystem::current_path(cpath);
+    if (parameterList_main->get("Export solution to fem_sol.txt", false)) {
+        {
+            FROSch::WorkingDirectoryGuard guard(std::filesystem::current_path() / "output"); // concatenate cwd and subfolder output.
+            Xpetra::IO<SC, LO, GO, NO>::Write("fem_sol.txt", *solution_xpetra); // also writes map_fem_sol.txt
+        } // The old working directory is automatically restored here.
     }
 
     comm->barrier();

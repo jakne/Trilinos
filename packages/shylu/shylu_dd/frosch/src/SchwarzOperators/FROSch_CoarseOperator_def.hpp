@@ -62,8 +62,13 @@ namespace FROSch {
                 FROSCH_ASSERT(CoarseSpace_->hasGlobalBasisMatrix(),"FROSch::CoarseOperator : !CoarseSpace_->hasGlobalBasisMatrix()");
                 Phi_ = CoarseSpace_->getGlobalBasisMatrix();
 
-                // Xpetra::IO< SC, LO, GO, NO >::Write("K_.txt", *(this->K_), true); // TODO: [JK]
-                // Xpetra::IO< SC, LO, GO, NO >::Write("Phi_.txt", *(this->Phi_), true); // TODO: [JK]
+                if (this->ParameterList_->get("Export coarse functions to Phi.txt",false)) {
+                    {
+                        FROSch::WorkingDirectoryGuard guard(std::filesystem::current_path() / "output"); // concatenate cwd and subfolder output.
+                        // Xpetra::IO< SC, LO, GO, NO >::Write("K_.txt", *(this->K_), true); // TODO: [JK]
+                        Xpetra::IO< SC, LO, GO, NO >::Write("Phi.txt", *(this->Phi_), true);
+                    } // The old working directory is automatically restored here.
+                }
             }
         }
         if (!reuseCoarseMatrix) {

@@ -57,7 +57,10 @@ namespace FROSch {
         UnassembledSubspaceBases_.push_back(subspaceBasis);
         Offsets_.push_back(offset);
 //        LocalSubspacesSizes_.push_back(subspaceBasisMap->getLocalNumElements());
-        LocalSubspacesSizes_.push_back(subspaceBasisVec->size());
+        if (subspaceBasisVec.is_null())
+            LocalSubspacesSizes_.push_back(0);
+        else
+            LocalSubspacesSizes_.push_back(subspaceBasisVec->size());
 
         return 0;
     }
