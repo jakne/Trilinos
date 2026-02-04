@@ -127,6 +127,7 @@
                                 <Parameter name="Check symmetry"                    type="bool"     value="no"/>
                             </ParameterList>
                         </ParameterList>
+                        <Parameter name="Add MPI barriers for some timers"          type="bool"     value="true"/>  <!-- To clearly separate the timings for some distinct parts of the code, include MPI barriers. -->
                     </ParameterList>
 
                 </ParameterList> <!-- GDSWCoarseOperator -->
