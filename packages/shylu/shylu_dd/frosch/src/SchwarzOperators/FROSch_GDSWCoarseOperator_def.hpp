@@ -802,6 +802,7 @@ namespace FROSch {
                             FROSCH_TIMER_START_LEVELID(timeFacesAGDSW7_loop_4,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW face functions (7): loop [4]");
                             // Solve k_RR * X = k_Re__MV.
                             // --> inv_k_RR__k_Re__MV := X.
+                            double t_start = MPI_Wtime();
                             XMultiVectorPtr inv_k_RR__k_Re__MV = MultiVectorFactory<SC,LO,GO,NO>::Build(k_RR->getRowMap(),numFaceNodes);
                             this->ExtensionSolver_ = SolverFactory<SC,LO,GO,NO>::Build(k_RR,
                                                                  sublist(this->ParameterList_,"ExtensionSolver"),
@@ -809,7 +810,14 @@ namespace FROSch {
                             this->ExtensionSolver_->initialize();
                             this->ExtensionSolver_->compute();
                             this->ExtensionSolver_->apply( *k_Re__MV, *inv_k_RR__k_Re__MV );  // (*input,*solution)
+                            double t_end = MPI_Wtime();
                             FROSCH_TIMER_STOP(timeFacesAGDSW7_loop_4);
+                            double elapsed = t_end - t_start;
+                            GO globalFaceID = globalFaceIDsOfSubdomain.at(localInterfItemID);
+                            std::cout << std::fixed << std::setprecision(3);
+                            std::cout << "Rank " << this->MpiComm_->getRank() 
+                                      << "  Interf. Item (local/global) " << localInterfItemID << "/" << globalFaceID
+                                      << " elapsed time: " << elapsed << " seconds" << std::endl;
 
                             FROSCH_TIMER_START_LEVELID(timeFacesAGDSW7_loop_5,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW face functions (7): loop [5]");
                             XMultiVectorPtr k_eR__inv_k_RR__k_Re__MV = MultiVectorFactory<SC,LO,GO,NO>::Build(k_eR->getRowMap(),numFaceNodes);
@@ -1035,7 +1043,9 @@ namespace FROSch {
                         // Now, we can compute the cumulative sum across all ranks (of the neighborhood communicator).
                         // This will give us an offset, in which column the eigenvectors shall be stored globally (i.e., the ID of the corresponding coarse function).
                         int cumsum = -1;
+                        FROSCH_TIMER_START_LEVELID(timeFacesAGDSW10a_loop,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW face functions (10a): cumsum");
                         Teuchos::scan<int, int>(*(this->MpiComm_), Teuchos::REDUCE_SUM, numInterfFnHandledByRoot, Teuchos::outArg(cumsum));
+                        FROSCH_TIMER_STOP(timeFacesAGDSW10a_loop);
                         const int globalOffsetOfRank = cumsum - numInterfFnHandledByRoot;
 
                         // Compute global offset per item.
