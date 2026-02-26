@@ -1076,11 +1076,7 @@ namespace FROSch {
                         // local-to-global vector that maps the ID of an interface function on the current rank to the corresponding ID of the global coarse function.
                         Teuchos::RCP<GOVec> localInterfFnIDToGlobalCoarseFnID = Teuchos::rcp(new GOVec(0));
 
-                        // If the current rank/subdomain has, for example, three edges with the respective sets of 
-                        // selected eigenvectors S1 = (s11,s12,...,s1a), S2 = (s21,s22,...,s2b), S3 = (s31,s32,...,s3c),
-                        // they will be stored in an assembled format as S = (s11,s12,...,s1a,s21,s22,...,s2b,s31,s32,...,s3c).
-                        // The local offset is then, for example, a+b+1 for s31 (for one-based indices).
-                        int localOffsetOfInterfItemOfRank = 0;
+                        Teuchos::Array< Teuchos::RCP<Tpetra::MultiVector<SC, LO, GO, NO>> > selectedEigenvectors__MV__unique__list(0), selectedEigenvectors__MV__repeated__list(0);
 
                         // Share selected eigenvectors with associated subdomains/ranks (they were computed only on one rank), 
                         // extend them by zero to the local interface, and store everything in a MultiVector.
@@ -1098,12 +1094,13 @@ namespace FROSch {
                             // In the following, we will extract the selected eigenvectors, store them in a uniquely-distributed MultiVector, 
                             // copy this over to a repeatedly-distributed MultiVector (s.t. all item-associated MPI ranks have access to the values), 
                             // and then copy the values to a SerialDenseMatrix. TODO: not necessary.
-                            Teuchos::RCP< Teuchos::SerialDenseMatrix< LO, SC > > selectedEigenvectors_ptr;
+                            Teuchos::RCP<Tpetra::MultiVector<SC, LO, GO, NO>> selectedEigenvectors__MV__unique = Teuchos::null;
+                            Teuchos::RCP<Tpetra::MultiVector<SC, LO, GO, NO>> selectedEigenvectors__MV__repeated = Teuchos::null;
                             if (numEigVecToSelect > 0) {
                                 Teuchos::RCP<const Tpetra::Map<LO, GO, NO>> globalUniqueMapForItem = itemMapsUnique.at(localInterfItemID);
                                 Teuchos::RCP<const Tpetra::Map<LO, GO, NO>> globalRepeatedMapForItem = itemMapsRepeated.at(localInterfItemID);
-                                Teuchos::RCP<Tpetra::MultiVector<SC, LO, GO, NO>> selectedEigenvectors__MV__unique = Teuchos::rcp(new Tpetra::MultiVector<SC, LO, GO, NO>(globalUniqueMapForItem, numEigVecToSelect));
-                                Teuchos::RCP<Tpetra::MultiVector<SC, LO, GO, NO>> selectedEigenvectors__MV__repeated = Teuchos::rcp(new Tpetra::MultiVector<SC, LO, GO, NO>(globalRepeatedMapForItem, numEigVecToSelect));
+                                selectedEigenvectors__MV__unique = Teuchos::rcp(new Tpetra::MultiVector<SC, LO, GO, NO>(globalUniqueMapForItem, numEigVecToSelect));
+                                selectedEigenvectors__MV__repeated = Teuchos::rcp(new Tpetra::MultiVector<SC, LO, GO, NO>(globalRepeatedMapForItem, numEigVecToSelect));
 
                                 if (commNeighborsOfInterfItem->getRank() == rootRankOfNeighborhood) {
 
@@ -1134,13 +1131,45 @@ namespace FROSch {
 
                                 // Import the data (distribute, i.e., duplicate data from unique indices to repeated indices)
                                 Teuchos::RCP<Tpetra::Import<LO, GO, NO>> importer = importer__list.at(localInterfItemID);
-                                selectedEigenvectors__MV__repeated->doImport(*selectedEigenvectors__MV__unique, *importer, Tpetra::INSERT); // TODO: beginImport/endImport
-    
-                                selectedEigenvectors_ptr = FROSch::convert_GlobalTMultiVector_to_SerialDenseMatrix(selectedEigenvectors__MV__repeated.getConst());
+                                selectedEigenvectors__MV__repeated->beginImport(*selectedEigenvectors__MV__unique, *importer, Tpetra::INSERT);
                             }
+
+                            selectedEigenvectors__MV__unique__list.push_back(selectedEigenvectors__MV__unique);
+                            selectedEigenvectors__MV__repeated__list.push_back(selectedEigenvectors__MV__repeated);
+                        } // for: iterate over local faces
+
+                        for (int localInterfItemID = 0; localInterfItemID < numFacesLocal; localInterfItemID++) {
+
+                            int numEigVecToSelect = numEigVec__list[localInterfItemID];
+                            if (numEigVecToSelect > 0) {
+                                Teuchos::RCP<Tpetra::MultiVector<SC, LO, GO, NO>> selectedEigenvectors__MV__unique = selectedEigenvectors__MV__unique__list.at(localInterfItemID);
+                                Teuchos::RCP<Tpetra::MultiVector<SC, LO, GO, NO>> selectedEigenvectors__MV__repeated = selectedEigenvectors__MV__repeated__list.at(localInterfItemID);
+
+                                // Import the data (distribute, i.e., duplicate data from unique indices to repeated indices)
+                                Teuchos::RCP<Tpetra::Import<LO, GO, NO>> importer = importer__list.at(localInterfItemID);
+                                selectedEigenvectors__MV__repeated->endImport(*selectedEigenvectors__MV__unique, *importer, Tpetra::INSERT);
+                            }
+                        } // for: iterate over local faces
+
+                        // If the current rank/subdomain has, for example, three edges with the respective sets of 
+                        // selected eigenvectors S1 = (s11,s12,...,s1a), S2 = (s21,s22,...,s2b), S3 = (s31,s32,...,s3c),
+                        // they will be stored in an assembled format as S = (s11,s12,...,s1a,s21,s22,...,s2b,s31,s32,...,s3c).
+                        // The local offset is then, for example, a+b+1 for s31 (for one-based indices).
+                        int localOffsetOfInterfItemOfRank = 0;
+
+                        for (int localInterfItemID = 0; localInterfItemID < numFacesLocal; localInterfItemID++) {
+
+                            int numEigVecToSelect = numEigVec__list[localInterfItemID];
+                            LO localEntityID = localEntityIDsOfSubdomain.at(localInterfItemID);
+                            const InterfaceEntityPtr entity_ptr = DDInterface_->getFaces()->getEntity(localEntityID);
+                            int numFaceNodes = entity_ptr->getNumNodes();
 
                             // If eigenvectors were selected, store them in the MultiVector. Otherwise check whether the GDSW function should be constructed and stored.
                             if (numEigVecToSelect > 0) {
+                                Teuchos::RCP<Tpetra::MultiVector<SC, LO, GO, NO>> selectedEigenvectors__MV__repeated = selectedEigenvectors__MV__repeated__list.at(localInterfItemID);
+                                Teuchos::RCP< Teuchos::SerialDenseMatrix< LO, SC > > selectedEigenvectors_ptr = 
+                                    FROSch::convert_GlobalTMultiVector_to_SerialDenseMatrix(selectedEigenvectors__MV__repeated.getConst());
+
                                 for (int eigfn = 0; eigfn < numEigVecToSelect; eigfn++) {
                                     for (int j = 0; j < numFaceNodes; j++) {
                                         assembledListOfConstructedInterfFnOfRank[0]->replaceLocalValue( entity_ptr->getGammaDofID(j,0), localOffsetOfInterfItemOfRank + eigfn, (*selectedEigenvectors_ptr)(j,eigfn) );
