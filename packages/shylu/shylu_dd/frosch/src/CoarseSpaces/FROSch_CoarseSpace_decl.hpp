@@ -69,21 +69,11 @@ namespace FROSch {
         CoarseSpace(CommPtr mpiComm,
                     CommPtr serialComm);
 
-        void addSubspaceOnlyMap(ConstXMapPtr subspaceBasisMap);
-
-        Teuchos::RCP<Teuchos::Array<GO>> getMapVector(int i);
-
-        int addSubspaceT(Teuchos::RCP<GOVec> subspaceBasisVec, // $$$                                               
-                        ConstXMapPtr subspaceBasisMapUnique = null,
-                        ConstXMultiVectorPtr subspaceBasis = null,
-                        UN offset = 0);
-
         int addSubspace(ConstXMapPtr subspaceBasisMap,
                         ConstXMapPtr subspaceBasisMapUnique = null,
                         ConstXMultiVectorPtr subspaceBasis = null,
                         UN offset = 0);
 
-        int assembleCoarseSpaceT();
         int assembleCoarseSpace();
 
         int buildGlobalBasisMatrix(ConstXMapPtr rowMap,
@@ -121,7 +111,6 @@ namespace FROSch {
         CommPtr SerialComm_;
 
         ConstXMapPtrVec UnassembledBasesMaps_ = ConstXMapPtrVec(0);
-        Teuchos::Array<Teuchos::RCP<Teuchos::Array<GO>>> UnassembledBasesVecs_ = Teuchos::Array<Teuchos::RCP<Teuchos::Array<GO>>>(0); // $$$
         ConstXMapPtrVec UnassembledBasesMapsUnique_ = ConstXMapPtrVec(0);
 
         ConstXMultiVectorPtrVec UnassembledSubspaceBases_ = ConstXMultiVectorPtrVec(0);

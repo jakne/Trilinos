@@ -253,8 +253,8 @@ namespace FROSch {
         FROSCH_DETAILTIMER_START_LEVELID(buildCoarseSpaceTime,"GDSWCoarseOperator::buildCoarseSpace");
         FROSCH_ASSERT(dofsMaps.size()==dofsPerNode,"dofsMaps.size()!=dofsPerNode");
 
-        // Das könnte man noch ändern
-        // TODO: DAS SOLLTE ALLES IN EINE FUNKTION IN HARMONICCOARSEOPERATOR
+        // This could be changed.
+        // TODO: This should all be placed in a function in HARMONICCOARSEOPERATOR
         resetCoarseSpaceBlock(this->NumberOfBlocks_,dimension,dofsPerNode,nodesMap,dofsMaps,dirichletBoundaryDofs,nodeList);
 
         return 0;
@@ -271,8 +271,8 @@ namespace FROSch {
                                                           ConstXMultiVectorPtrVecPtr nodeListVec)
     {
         FROSCH_DETAILTIMER_START_LEVELID(buildCoarseSpaceTime,"GDSWCoarseOperator::buildCoarseSpace");
-        // Das könnte man noch ändern
-        // TODO: DAS SOLLTE ALLES IN EINE FUNKTION IN HARMONICCOARSEOPERATOR
+        // This could be changed.
+        // TODO: This should all be placed in a function in HARMONICCOARSEOPERATOR
         for (UN i=0; i<repeatedNodesMapVec.size(); i++) {
             resetCoarseSpaceBlock(this->NumberOfBlocks_,dimension,dofsPerNodeVec[i],repeatedNodesMapVec[i],repeatedDofMapsVec[i],dirichletBoundaryDofsVec[i],nodeListVec[i]);
         }
@@ -505,24 +505,69 @@ namespace FROSch {
                             this->InterfaceCoarseSpaces_[blockId]->addSubspace(facesEntityMap,null,translations[i]);
                         }
                         FROSCH_TIMER_STOP(timeFacesGDSW);
-
-
-//                        this->MpiComm_->barrier();
-//                        std::this_thread::sleep_for(std::chrono::nanoseconds(50000));
-//                        std::cout << translations[0]->getNumVectors() << "  " << translations[0]->getLocalLength() << "  " << translations[0]->getGlobalLength() << std::endl;
-//                        this->MpiComm_->barrier();
-//                        std::this_thread::sleep_for(std::chrono::nanoseconds(50000));
-//
-//                        FROSch::debug::printMap(facesEntityMap,"facesEntityMap_",__FILE__,__LINE__);
-
                     } else if (useFaceTranslations & useAdaptiveCoarseSpace) {
-                        FROSCH_TIMER_START_LEVELID(timeFacesAGDSW,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW face functions");
+                        // Adaptive GDSW (AGDSW) coarse space
+                        //
+                        // The variant AGDSW-S is implemented, since it is much more efficient in parallel.
+                        //     Difference between AGDSW and AGDSW-S: At some point in the algorithm, a Schur complement is computed.
+                        //     For this Schur complement, an extension is computed from an interface component to its adjacent subdomains.
+                        //     This extension is coupled via the boundary nodes of the interface component (for example, the end points of a subdomain edge).
+                        //     This extension is decoupled in AGDSW-S via a sum of extensions that are local to the subdomains (can be computed completely in parallel).
+                        //     The S in AGDSW-S stands for the "sum".
+                        //
+                        // References
+                        // [1] Original paper (only variational description)
+                        //     DOI: 10.1137/18M1220613
+                        //     2019, Alexander Heinlein, Axel Klawonn, Jascha Knepper, Oliver Rheinbach
+                        //     Adaptive GDSW Coarse Spaces for Overlapping Schwarz Methods in Three Dimensions
+                        // [2] Generalization of AGDSW (contains matrix description of algorithm)
+                        //     DOI: 10.1137/20M1364540
+                        //     2022, Alexander Heinlein, Axel Klawonn, Jascha Knepper, Oliver Rheinbach, Olof B. Widlund
+                        //     Adaptive GDSW Coarse Spaces of Reduced Dimension for Overlapping Schwarz Methods
+                        // [3] Dissertation (contains MATLAB code for simple example)
+                        //     URN: https://nbn-resolving.org/urn:nbn:de:hbz:38-620024
+                        //     2022, Jascha Knepper
+                        //     Adaptive Coarse Spaces for the Overlapping Schwarz Method and Multiscale Elliptic Problems
+                        //     University of Cologne
+                        //
+                        // Notation and terminology
+                        // * interface component/item: The interface is partitioned into components/items.
+                        //   In a structured mesh an domain decomposition, these are subdomain vertices, subdomain edges, and subdomain faces.
+                        //   We also call them call them coarse vertices, coarse edges, and coarse faces.
+                        //   For unstructured mesh and domain decompositions -- as can be obtained with a graph partitioner like METIS -- 
+                        //   the algebraic nature of the interface partitioning (based on equivalence class w.r.t. the set of adjacent subdomains) 
+                        //   can give us other types of interface components that do not have a common name.
+                        //   Thus, we generally refer to them as interface components or interface items (the latter is shorter, so preferred here).
+                        //   A common abbreviation in the following is interfItem.
+                        // * Ki_ee, Ki_RR, Ki_Re: In the algorithm, the subdomain stiffness matrix Ki of subdomain i is partitioned w.r.t. different sets of degrees of freedom.
+                        //   An arbitrary interface component might be referred to be the greek letter xi.
+                        //   To keep the notation simpler, we will use e instead, so one may also always think about a coarse edge as an example for xi.
+                        //   Ki is then partitioned w.r.t. e and the remaining degrees of freedom R of the subdomain:
+                        //       Ki = [ Ki_RR Ki_Re ]
+                        //            [ Ki_eR Ki_ee ]
+                        //   We will also consider the subset K_ee of the global stiffness matrix, which is the sum of all Ki_ee; e.g.,
+                        //       K_ee = Ki_ee + Kj_ee (for an edge in two dimensions or a face in three dimensions).
+                        //   We will also consider a Schur complement S_ee, which is a (not the, it is not the standard Schur complement) type of 
+                        //   Schur complement on the interface component w.r.t. the adjacent subdomains.
+                        //
+                        // Sketch of algorithm
+                        // * Compute Schur complement S_ee for each interface component. (The expensive part of the algorithm if the final coarse matrix assembly and factorization are disregarded.)
+                        // * Extract K_ee from global stiffness matrix for each interface component.
+                        // * Solve generalized eigenvalue problem S_ee * v = lambda * K_ee * v for each interface component.
+                        // * Select all eigenvectors that are associated with an eigenvalue smaller than a user-prescribed tolerance tol.
+                        // * Extend selected eigenvectors by zero to the remaining interface. (This is the same as for GDSW.)
+                        // * Extend these interface functions operator-harmonically to the interior of the subdomains to obtain the coarse functions. (This is the same as for GDSW.)
+                        // * Assembly coarse functions in the columns of the matrix Phi. (This is the same as for GDSW.)
+                        // * Assemble coarse matrix Phi^T * K * Phi. (This is the same as for GDSW.)
+                        //
 
-//                        ConstXMapPtr facesEntityMap_ = DDInterface_->getFaces()->getEntityMap();
-//                        FROSch::debug::printMap(facesEntityMap_,"facesEntityMap_",__FILE__,__LINE__);
-		    
+                        // TODO: When intergrating this into the remaining code, I should not differentiate between different types of interface components.
+                        //       However, when the interface component is a vertex, I can skip computing the eigenvalue problem.
+                        //       I can also implement an option to replace an interface component of two degrees of freedom (or more?) with a vertices.
 
-                        FROSCH_TIMER_START_LEVELID(timeFacesAGDSW1,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW face functions (1)");
+                        FROSCH_TIMER_START_LEVELID(timeInterfItemsAGDSW,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW interface-item functions");
+
+                        FROSCH_TIMER_START_LEVELID(timeInterfItemsAGDSW1,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW interface-item functions (1)");
                         Teuchos::RCP<Teuchos::ParameterList> parameterList_adaptiveProblems = Teuchos::sublist(this->ParameterList_, "Adaptive problems");
                         const bool addMPIBarriersForSomeTimers = parameterList_adaptiveProblems->get("Add MPI barriers for some timers", true);
 
@@ -545,9 +590,7 @@ namespace FROSch {
 
                         Teuchos::RCP< Tpetra::FECrsMatrix<SC,LO,GO,NO> > dummy = Teuchos::null;
                         Teuchos::RCP< Tpetra::FECrsMatrix<SC,LO,GO,NO> > fe_matrix = this->ParameterList_->get("Neumann Matrices",dummy);
-                        FROSCH_TIMER_STOP(timeFacesAGDSW1);
 
-                        FROSCH_TIMER_START_LEVELID(timeFacesAGDSW2,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW face functions (2) Extract subdomain matrix (repeated)");
                         ConstXMapPtr repeatedMap;
                         ConstXMatrixPtr repeatedMatrix;
                         repeatedMap = FROSch::AssembleSubdomainMap(this->NumberOfBlocks_,this->DofsMaps_,this->DofsPerNode_);
@@ -556,9 +599,7 @@ namespace FROSch {
                         } else {
                             repeatedMatrix = FROSch::ExtractLocalSubdomainMatrix(fe_matrix.getConst(),repeatedMap.getConst());
                         }
-                        FROSCH_TIMER_STOP(timeFacesAGDSW2);
 
-                        FROSCH_TIMER_START_LEVELID(timeFacesAGDSW3,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW face functions (3)");
                         // List of all local nodes that is used later to extract submatrices
                         const int numEl = nodesMap->getLocalNumElements();
                         std::vector<GO> allLocalNodes(numEl); // not dofs! needs to be changed.
@@ -570,10 +611,9 @@ namespace FROSch {
                         // Later on, when the map is used to store the eigenfunctions on the items (e.g., edges), another map is used to map from the item to the local interface.
                         XMapPtr serialGammaMap = MapFactory<LO,GO,NO>::Build(this->K_->getRowMap()->lib(),this->GammaDofs_[0].size(),0,this->SerialComm_);
                         //FROSch::debug::printMap(serialGammaMap,"serialGammaMap",__FILE__,__LINE__);
-                        FROSCH_TIMER_STOP(timeFacesAGDSW3);
 
                         // Set up sub communicators.
-                        FROSCH_TIMER_START_LEVELID(timeFacesAGDSW4,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW face functions (4): set up sub communicators");
+                        // For each interface component, a sub communicator is created that contains only the subdomains that are adjacent to the interface component.
                         Teuchos::Array<Teuchos::RCP< const Teuchos::Comm<int> >> subcomms(0);
                         using InterfaceEntityPtr = typename SchwarzOperator<SC,LO,GO,NO>::InterfaceEntityPtr;
                         MPI_Group world_group;
@@ -582,7 +622,7 @@ namespace FROSch {
                         Teuchos::RCP<const Teuchos::OpaqueWrapper<MPI_Comm> > wrapper = mpiCommPtr->getRawMpiComm();
                         MPI_Comm rawMpiComm = *wrapper;
                         MPI_Comm_group(rawMpiComm, &world_group);
-                        // Since we iterate over the global ID of a face, faces locally are then sorted by their global ID.
+                        // Since we iterate over the global ID of an interface item, items locally are then sorted by their global ID.
                         // Since we iterater over 0 to numInterfItems_global-1, the global IDs are also sorted.
                         // Later, this means, that the local IDs are sorted by the values of the global IDs.
                         // As a result: If subdomain 1 processes its local edge 1 first, 
@@ -604,24 +644,10 @@ namespace FROSch {
 
                                 const typename SchwarzOperator<SC,LO,GO,NO>::IntVec subdomainsVector = entity_ptr->getSubdomainsVector();
                                 
-                                // std::cout << "subdomainsVector" << std::endl;
-                                // commNeighborsOfInterfItem->barrier();
-                                // std::this_thread::sleep_for(std::chrono::nanoseconds(50000));
-                                // for (int ww = 0; ww < subdomainsVector.size(); ww++) {
-                                //     std::cout << commNeighborsOfInterfItem->getRank() << " | " << subdomainsVector[ww] << std::endl;
-                                //     commNeighborsOfInterfItem->barrier();
-                                //     std::this_thread::sleep_for(std::chrono::nanoseconds(5000));
-                                // }
-                                // commNeighborsOfInterfItem->barrier();
-                                // std::this_thread::sleep_for(std::chrono::nanoseconds(50000));
-
-                                // std::this_thread::sleep_for(std::chrono::nanoseconds(50000));
                                 int* ranks_to_include = new int[subdomainsVector.size()];
                                 for (int ww = 0; ww < subdomainsVector.size(); ww++) {
                                     ranks_to_include[ww] = subdomainsVector[ww];
-                                    // std::cout << this->MpiComm_->getRank() << " | " << subdomainsVector[ww] << std::endl;
                                 }
-                                // std::this_thread::sleep_for(std::chrono::nanoseconds(50000));
                                 int num_ranks = subdomainsVector.size();
 
                                 MPI_Group new_group;
@@ -634,51 +660,48 @@ namespace FROSch {
 
                                 subcomms.push_back(commNeighborsOfInterfItem);
                             }
-                        }
-                        if (addMPIBarriersForSomeTimers) this->MpiComm_->barrier();
+                        } // for: iterate over global interface items
 
                         // Within the neighboorhood communicator, the rank with ID 0 shall be the root.
                         // It will be that rank that will compute the sum of local Schur complements and that will solve the eigenvalue problem.
                         const int rootRankOfNeighborhood = 0;
 
-                        FROSCH_TIMER_STOP(timeFacesAGDSW4);
-
-                        // local-to-global map of local face IDs
-                        FROSCH_TIMER_START_LEVELID(timeFacesAGDSW5,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW face functions (5): local-to-global map of local face IDs");
-                        //const int numFaces_local = DDInterface_->getFaces()->getNumEntities();
-                        int numFacesLocal = 0;
-                        Teuchos::Array<GO> globalFaceIDsOfSubdomain(0);
+                        // local-to-global map of local item IDs
+                        int numInterfItemsLocal = 0;
+                        Teuchos::Array<GO> globalInterfItemIDsOfSubdomain(0);
                         Teuchos::Array<LO> localEntityIDsOfSubdomain(0);
-                        for (int ii = 0; ii < numInterfItems_global; ii++){ // See comment at the last loop over the global faces
+                        for (int ii = 0; ii < numInterfItems_global; ii++){ // See comment at the last loop over the global interface items
                             const GO INVALID = Teuchos::OrdinalTraits<GO>::invalid();
                             const LO localEntityID = DDInterface_->getFaces()->getEntityMap()->getLocalElement(ii);
                             if (localEntityID != INVALID) {
-                                globalFaceIDsOfSubdomain.push_back(ii);
+                                globalInterfItemIDsOfSubdomain.push_back(ii);
                                 localEntityIDsOfSubdomain.push_back(localEntityID);
-                                numFacesLocal += 1;
+                                numInterfItemsLocal += 1;
                             }
-                        }
-                        if (addMPIBarriersForSomeTimers) this->MpiComm_->barrier();
-                        FROSCH_TIMER_STOP(timeFacesAGDSW5);
+                        } // for: iterate over global interface items
+                        //TODO: Assert that numInterfItemsLocal = DDInterface_->getFaces()->getNumEntities() ?
 
+                        if (addMPIBarriersForSomeTimers) this->MpiComm_->barrier();
+                        FROSCH_TIMER_STOP(timeInterfItemsAGDSW1);
+
+                        FROSCH_TIMER_START_LEVELID(timeInterfItemsAGDSW2,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW interface-item functions (2): maps, MultiVectors, exporter, importer");
                         // Create maps for the DOFs of an item (e.g., of an edge)
-                        FROSCH_TIMER_START_LEVELID(timeFacesAGDSW6,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW face functions (6): maps for DOFs of item");
                         Teuchos::Array< Teuchos::RCP<const Tpetra::Map<LO, GO, NO>> > itemMapsRepeated(0), itemMapsUnique(0);
-                        Teuchos::Array< Teuchos::RCP<Tpetra::MultiVector<SC, LO, GO, NO>> > s_ee__MV__unique__list(0),   k_ee__MV__unique__list;
-                        Teuchos::Array< Teuchos::RCP<Tpetra::MultiVector<SC, LO, GO, NO>> > s_ee__MV__repeated__list(0), k_ee__MV__repeated__list(0);
+                        Teuchos::Array< Teuchos::RCP<Tpetra::MultiVector<SC, LO, GO, NO>> > S_ee__MV__unique__list(0),   K_ee__MV__unique__list;
+                        Teuchos::Array< Teuchos::RCP<Tpetra::MultiVector<SC, LO, GO, NO>> > S_ee__MV__repeated__list(0), K_ee__MV__repeated__list(0);
                         Teuchos::Array< std::vector<GO> > collection_itemNodes(0);
                         Teuchos::Array< Teuchos::RCP<Tpetra::Import<LO, GO, NO>> > importer__list(0);
                         Teuchos::Array< Teuchos::RCP<Tpetra::Export<LO, GO, NO>> > exporter__list(0);
-                        for (int localInterfItemID = 0; localInterfItemID < numFacesLocal; localInterfItemID++) {
+                        for (int localInterfItemID = 0; localInterfItemID < numInterfItemsLocal; localInterfItemID++) {
                             LO localEntityID = localEntityIDsOfSubdomain.at(localInterfItemID);
                             const InterfaceEntityPtr entity_ptr = DDInterface_->getFaces()->getEntity(localEntityID);
-                            int numFaceNodes = entity_ptr->getNumNodes();
-                            std::vector<GO> itemNodes(0);//numFaceNodes); // not dofs! needs to be changed.
-                            itemNodes.resize(numFaceNodes);
+                            int numInterfItemNodes = entity_ptr->getNumNodes();
+                            std::vector<GO> itemNodes(0);//numInterfItemNodes); // not dofs! needs to be changed.
+                            itemNodes.resize(numInterfItemNodes);
 
                             std::vector<GO> itemNodesGlobalRepeated, itemNodesGlobalUnique;
                             // Get entity nodes.
-                            for (int jj = 0; jj < numFaceNodes; jj++) {
+                            for (int jj = 0; jj < numInterfItemNodes; jj++) {
                                 itemNodes[jj] = entity_ptr->getNode(jj).NodeIDLocal_;
                                 itemNodesGlobalRepeated.push_back(entity_ptr->getNode(jj).NodeIDGlobal_);
                             }
@@ -704,8 +727,9 @@ namespace FROSch {
                                 itemNodesGlobalUnique = {};
                             }
 
-                            // TODO: The following call is blocking. Does it matter time-wise and should be improved (re-ordering of the loop indices) or can we ignore that?
                             // Create a map using the list of repeated, global indices (of item DOFs).
+                            // TODO: The following call is blocking. Does it matter time-wise and should be improved (re-ordering of the loop indices) or can we ignore that?
+                            //       Improving the order in which loop indices are iterated over is difficult. If the calls could be made non-blocking that would be much easier.
                             Teuchos::RCP<const Tpetra::Map<LO, GO, NO>> globalRepeatedMapForItem =
                                 Teuchos::rcp(new Tpetra::Map<LO, GO, NO>(
                                     Teuchos::OrdinalTraits<Tpetra::global_size_t>::invalid(), // Let Tpetra infer global size
@@ -714,9 +738,9 @@ namespace FROSch {
                                     commNeighborsOfInterfItem));
                             itemMapsRepeated.push_back(globalRepeatedMapForItem);
 
-                            // TODO: The following call is blocking. Does it matter time-wise and should be improved (re-ordering of the loop indices) or can we ignore that?
                             // Create a map using the list of unique, global indices (of item DOFs).
                             // All indices should be held by only one rank.
+                            // TODO: The following call is blocking. Does it matter time-wise and should be improved (re-ordering of the loop indices) or can we ignore that?
                             Teuchos::RCP<const Tpetra::Map<LO, GO, NO>> globalUniqueMapForItem =
                                 Teuchos::rcp(new Tpetra::Map<LO, GO, NO>(
                                     Teuchos::OrdinalTraits<Tpetra::global_size_t>::invalid(), // Let Tpetra infer global size
@@ -725,85 +749,58 @@ namespace FROSch {
                                     commNeighborsOfInterfItem));
                             itemMapsUnique.push_back(globalUniqueMapForItem);
 
-//                        FROSCH_TIMER_START_LEVELID(timeFacesAGDSW83_loop,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW face functions (8): [3] create Importer");
-//                        Teuchos::Array< Teuchos::RCP<Tpetra::Import<LO, GO, NO>> > importer__list(0);
-                        // beginImport loop: from unique to repeated (distribute Schur complement of interface component)
-//                        for (int localInterfItemID = 0; localInterfItemID < numFacesLocal; localInterfItemID++) {
-                            // Create importer to copy data from global unique MultiVector to global repeated MultiVector.
-//                            Teuchos::RCP<const Tpetra::Map<LO, GO, NO>> globalRepeatedMapForItem = itemMapsRepeated.at(localInterfItemID);
-//                            Teuchos::RCP<const Tpetra::Map<LO, GO, NO>> globalUniqueMapForItem = itemMapsUnique.at(localInterfItemID);
-
+                            // Make sure that send operations are not blocking to be able to use beginImport/endImport and beginExport/endExport.
                             Teuchos::RCP<Teuchos::ParameterList> plist = Teuchos::rcp(new Teuchos::ParameterList());
                             plist->set("Send type", "Isend");
 
+                            // Create importer to copy data from global unique MultiVector to global repeated MultiVector.
                             Teuchos::RCP<Tpetra::Import<LO, GO, NO>> importer = Teuchos::rcp(new Tpetra::Import<LO, GO, NO>(globalUniqueMapForItem, globalRepeatedMapForItem, plist));
                             importer__list.push_back(importer);
-//                        }
-//                        if (addMPIBarriersForSomeTimers) this->MpiComm_->barrier();
-//                        FROSCH_TIMER_STOP(timeFacesAGDSW83_loop);
 
-
-//                        FROSCH_TIMER_START_LEVELID(timeFacesAGDSW80b_loop,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW face functions (8): [1] create Exporter");
-//                        Teuchos::Array< Teuchos::RCP<Tpetra::Export<LO, GO, NO>> > exporter__list(0);
-                        // beginExport loop: from repeated to unique (add local Schur complements)
-//                        for (int localInterfItemID = 0; localInterfItemID < numFacesLocal; localInterfItemID++) {
                             // Create exporter to copy the data from the global repeated MultiVector to the global unique MultiVector.
-//                            Teuchos::RCP<const Tpetra::Map<LO, GO, NO>> globalRepeatedMapForItem = itemMapsRepeated.at(localInterfItemID);
-//                            Teuchos::RCP<const Tpetra::Map<LO, GO, NO>> globalUniqueMapForItem = itemMapsUnique.at(localInterfItemID);
                             Teuchos::RCP<Tpetra::Export<LO, GO, NO>> exporter = Teuchos::rcp(new Tpetra::Export<LO, GO, NO>(globalRepeatedMapForItem, globalUniqueMapForItem, plist));
                             exporter__list.push_back(exporter);
-//                        }
-//                        if (addMPIBarriersForSomeTimers) this->MpiComm_->barrier();
-//                        FROSCH_TIMER_STOP(timeFacesAGDSW80b_loop);
-
 
                             // Although globalUniqueMapForItem and globalRepeatedMapForItem hold global indices, during the 
                             // creation of the MultiVector and exporter/importer, these will be mapped to some contiguous
                             // index set. For example: (1,9,88) could be mapped to (0,1,2). As a result, the size of following 
                             // MultiVectors equals the number of unique indices.
 
-                            // The values s_ee__MV->getNumVectors(), globalUniqueMapForItem->getGlobalNumElements(), numFaceNodes should all coincide. TODO: numFaceNodes should become numFaceDOFs, but nothing else should change.
                             // Create neighbor-global, distributed, unique MultiVector. The rank with lowest ID will hold all data. The remaining ones don't hold any data.
                             // Also create a corresponding repeated MultiVector.
-
                             // TODO: The following four calls are blocking. Does it matter time-wise and should be improved (re-ordering of the loop indices) or can we ignore that?
-                            Teuchos::RCP<Tpetra::MultiVector<SC, LO, GO, NO>> s_ee__MV__unique = Teuchos::rcp(new Tpetra::MultiVector<SC, LO, GO, NO>(globalUniqueMapForItem, numFaceNodes));
-                            Teuchos::RCP<Tpetra::MultiVector<SC, LO, GO, NO>> k_ee__MV__unique = Teuchos::rcp(new Tpetra::MultiVector<SC, LO, GO, NO>(globalUniqueMapForItem, numFaceNodes));
-                            Teuchos::RCP<Tpetra::MultiVector<SC, LO, GO, NO>> s_ee__MV__repeated = Teuchos::rcp(new Tpetra::MultiVector<SC, LO, GO, NO>(globalRepeatedMapForItem, numFaceNodes));
-                            Teuchos::RCP<Tpetra::MultiVector<SC, LO, GO, NO>> k_ee__MV__repeated = Teuchos::rcp(new Tpetra::MultiVector<SC, LO, GO, NO>(globalRepeatedMapForItem, numFaceNodes));
+                            Teuchos::RCP<Tpetra::MultiVector<SC, LO, GO, NO>> S_ee__MV__unique = Teuchos::rcp(new Tpetra::MultiVector<SC, LO, GO, NO>(globalUniqueMapForItem, numInterfItemNodes));
+                            Teuchos::RCP<Tpetra::MultiVector<SC, LO, GO, NO>> K_ee__MV__unique = Teuchos::rcp(new Tpetra::MultiVector<SC, LO, GO, NO>(globalUniqueMapForItem, numInterfItemNodes));
+                            Teuchos::RCP<Tpetra::MultiVector<SC, LO, GO, NO>> S_ee__MV__repeated = Teuchos::rcp(new Tpetra::MultiVector<SC, LO, GO, NO>(globalRepeatedMapForItem, numInterfItemNodes));
+                            Teuchos::RCP<Tpetra::MultiVector<SC, LO, GO, NO>> K_ee__MV__repeated = Teuchos::rcp(new Tpetra::MultiVector<SC, LO, GO, NO>(globalRepeatedMapForItem, numInterfItemNodes));
 
-                            s_ee__MV__repeated__list.push_back(s_ee__MV__repeated);
-                            k_ee__MV__repeated__list.push_back(k_ee__MV__repeated);
-                            s_ee__MV__unique__list.push_back(s_ee__MV__unique);
-                            k_ee__MV__unique__list.push_back(k_ee__MV__unique);
-                        }
+                            // The values S_ee__MV->getNumVectors(), globalUniqueMapForItem->getGlobalNumElements(), numInterfItemNodes should all coincide.
+                            // TODO: Should there be an assertion?
+
+                            S_ee__MV__repeated__list.push_back(S_ee__MV__repeated);
+                            K_ee__MV__repeated__list.push_back(K_ee__MV__repeated);
+                            S_ee__MV__unique__list.push_back(S_ee__MV__unique);
+                            K_ee__MV__unique__list.push_back(K_ee__MV__unique);
+                        } // for: iterate over local interface items
                         if (addMPIBarriersForSomeTimers) this->MpiComm_->barrier();
-                        FROSCH_TIMER_STOP(timeFacesAGDSW6);
+                        FROSCH_TIMER_STOP(timeInterfItemsAGDSW2);
 
-                        // Compute local contributions to eigenvalue problem (no communication).
-                        FROSCH_TIMER_START_LEVELID(timeFacesAGDSW7_loop,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW face functions (7): loop over local faces");
+                        FROSCH_TIMER_START_LEVELID(timeInterfItemsAGDSW3,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW interface-item functions (3): Assemble generalized eigenvalue problem");
+
+                        FROSCH_TIMER_START_LEVELID(timeInterfItemsAGDSW3_1,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW interface-item functions (3): [1] Compute locala contributions and beginExport");
+                        // Compute local contributions to eigenvalue problem and then start communicating the result via beginExport (non-blocking MPI).
                         Teuchos::Array<XMultiVectorPtr> evpRHSs(0);
                         Teuchos::Array<XMultiVectorPtr> evpLHSs(0);
-                        for (int localInterfItemID = 0; localInterfItemID < numFacesLocal; localInterfItemID++) {
-                            FROSCH_TIMER_START_LEVELID(timeFacesAGDSW7_loop_1,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW face functions (7): loop [1]");
+                        for (int localInterfItemID = 0; localInterfItemID < numInterfItemsLocal; localInterfItemID++) {
+                            FROSCH_TIMER_START_LEVELID(timeInterfItemsAGDSW3_loop_1,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW interface-item functions (3): loop [1]");
                             LO localEntityID = localEntityIDsOfSubdomain.at(localInterfItemID);
                             std::vector<GO> itemNodes = collection_itemNodes.at(localInterfItemID);
 
-                            // get number of face nodes
+                            // get number of interface item nodes
                             const InterfaceEntityPtr entity_ptr = DDInterface_->getFaces()->getEntity(localEntityID);
-                            int numFaceNodes = entity_ptr->getNumNodes(); // not dofs! needs to be changed.
-                            // int maxNumFaceNodes_ranks = 0;
-                            // reduceAll(*this->MpiComm_,Teuchos::REDUCE_MAX,numFaceNodes,ptr(&maxNumFaceNodes_ranks));
-                            // numFaceNodes = maxNumFaceNodes_ranks;
+                            int numInterfItemNodes = entity_ptr->getNumNodes(); // not dofs! needs to be changed.
 
                             GOVec indicesR(0);  // R:[r]emaining nodes
-
-                            // Fetch split communicator to those subdomains neighboring the entity and the remaining ones.
-                            //Teuchos::RCP< const Teuchos::Comm<int> > commNeighborsOfInterfItem = subcomms.at(localInterfItemID);
-
-                            // reduceAll(*this->MpiComm_,REDUCE_SUM,localVec[0],ptr(&sumVec[0]));
-                            // int minRankIDofCommunicator = 0; // always zero for sub communicator.
-                            // reduceAll(*commNeighborsOfInterfItem,Teuchos::REDUCE_MIN,commNeighborsOfInterfItem->getRank(),ptr(&maxNumFaceNodes_ranks));
 
                             // Get set of remaining subdomain nodes.
                             std::vector<int> diff;
@@ -811,185 +808,156 @@ namespace FROSch {
                             for (int jj = 0; jj < (int)diff.size(); jj++) {
                                 indicesR.push_back(diff[jj]);
                             }
-                            FROSCH_TIMER_STOP(timeFacesAGDSW7_loop_1);
 
-                            FROSCH_TIMER_START_LEVELID(timeFacesAGDSW7_loop_2,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW face functions (7): loop [2]");
-                            XMatrixPtr k_ee, k_RR, k_Re, k_eR;
-                            FROSch::BuildSubmatrices(repeatedMatrix.getConst(),indicesR(),k_RR,k_Re,k_eR,k_ee);
-                            FROSCH_TIMER_STOP(timeFacesAGDSW7_loop_2);
+                            XMatrixPtr Ki_ee, Ki_RR, Ki_Re, Ki_eR;
+                            FROSch::BuildSubmatrices(repeatedMatrix.getConst(),indicesR(),Ki_RR,Ki_Re,Ki_eR,Ki_ee);
 
-                            FROSCH_TIMER_START_LEVELID(timeFacesAGDSW7_loop_3,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW face functions (7): loop [3]");
-                            // FROSch::debug::printMap(k_ee->getRowMap(),"kee row map",__FILE__,__LINE__);
+                            // FROSch::debug::printMap(Ki_ee->getRowMap(),"kee row map",__FILE__,__LINE__);
                             // FROSch::debug::printMap(globalRepeatedMapForItem,"item repeated map",__FILE__,__LINE__);
                             // FROSch::debug::printMap(globalUniqueMapForItem,"item unique map",__FILE__,__LINE__);
 
-                            // [JK] Todo: assert: numFaceNodes == k_ee->getRowMap()->getLocalNumElements()
-                            XMultiVectorPtr id_e = MultiVectorFactory<SC,LO,GO,NO>::Build(k_ee->getRowMap(),numFaceNodes);
-                            for (int jj=0; jj<numFaceNodes; jj++) {
-                                id_e->replaceLocalValue(jj,jj,ScalarTraits<SC>::one());
+                            // TODO: assert: numInterfItemNodes == Ki_ee->getRowMap()->getLocalNumElements()
+
+                            // Identiy matrix stored in MultiVector.
+                            XMultiVectorPtr identity_e = MultiVectorFactory<SC,LO,GO,NO>::Build(Ki_ee->getRowMap(),numInterfItemNodes);
+                            for (int jj=0; jj<numInterfItemNodes; jj++) {
+                                identity_e->replaceLocalValue(jj,jj,ScalarTraits<SC>::one());
                             }
 
-                            XMultiVectorPtr k_Re__MV = MultiVectorFactory<SC,LO,GO,NO>::Build(k_Re->getRowMap(),numFaceNodes);
-                            k_Re->apply( *id_e, *k_Re__MV );  // (*input,*solution)
-                            FROSCH_TIMER_STOP(timeFacesAGDSW7_loop_3);
+                            // Convert from XMatrix to MultiVector.
+                            XMultiVectorPtr Ki_Re__MV = MultiVectorFactory<SC,LO,GO,NO>::Build(Ki_Re->getRowMap(),numInterfItemNodes);
+                            Ki_Re->apply( *identity_e, *Ki_Re__MV );  // (*input,*solution)
+                            FROSCH_TIMER_STOP(timeInterfItemsAGDSW3_loop_1);
 
-                            FROSCH_TIMER_START_LEVELID(timeFacesAGDSW7_loop_4,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW face functions (7): loop [4]");
-                            // Solve k_RR * X = k_Re__MV.
-                            // --> inv_k_RR__k_Re__MV := X.
-//                            double t_start = MPI_Wtime();
-                            XMultiVectorPtr inv_k_RR__k_Re__MV = MultiVectorFactory<SC,LO,GO,NO>::Build(k_RR->getRowMap(),numFaceNodes);
-                            this->ExtensionSolver_ = SolverFactory<SC,LO,GO,NO>::Build(k_RR,
-                                                                 sublist(this->ParameterList_,"ExtensionSolver"),
-                                                                 string("ExtensionSolver (Level ") + to_string(this->LevelID_) + string(")"));
+                            FROSCH_TIMER_START_LEVELID(timeInterfItemsAGDSW3_loop_2,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW interface-item functions (3): loop [2] operator-harmonic extension");
+                            // Solve Ki_RR * X = Ki_Re__MV.
+                            // --> inv_Ki_RR__Ki_Re__MV := X.
+                            const double t_start = MPI_Wtime();
+                            XMultiVectorPtr inv_Ki_RR__Ki_Re__MV = MultiVectorFactory<SC,LO,GO,NO>::Build(Ki_RR->getRowMap(),numInterfItemNodes);
+                            this->ExtensionSolver_ = SolverFactory<SC,LO,GO,NO>::Build(
+                                Ki_RR,
+                                sublist(this->ParameterList_,"ExtensionSolver"),
+                                string("ExtensionSolver (Level ") + to_string(this->LevelID_) + string(")"));
                             this->ExtensionSolver_->initialize();
                             this->ExtensionSolver_->compute();
-                            this->ExtensionSolver_->apply( *k_Re__MV, *inv_k_RR__k_Re__MV );  // (*input,*solution)
-//                            double t_end = MPI_Wtime();
-                            FROSCH_TIMER_STOP(timeFacesAGDSW7_loop_4);
-//                            double elapsed = t_end - t_start;
-//                            GO globalFaceID = globalFaceIDsOfSubdomain.at(localInterfItemID);
-//                            std::cout << std::fixed << std::setprecision(3);
-//                            std::cout << "Rank " << this->MpiComm_->getRank() 
-//                                      << "  Interf. Item (local/global) " << localInterfItemID << "/" << globalFaceID
-//                                      << " elapsed time: " << elapsed << " seconds" << std::endl;
+                            this->ExtensionSolver_->apply( *Ki_Re__MV, *inv_Ki_RR__Ki_Re__MV );  // (*input,*solution)
+                            const double t_end = MPI_Wtime();
+                            FROSCH_TIMER_STOP(timeInterfItemsAGDSW3_loop_2);
+                            const double elapsed = t_end - t_start;
+                            const GO globalInterfItemID = globalInterfItemIDsOfSubdomain.at(localInterfItemID);
+                            if (parameterList_adaptiveProblems->get("Print detailed extension times", false)) {
+                                std::cout << std::fixed << std::setprecision(3);
+                                std::cout << "Operator-harmonic extension. Rank " << this->MpiComm_->getRank() 
+                                          << "  Interf. Item (local/global) " << localInterfItemID << "/" << globalInterfItemID
+                                          << " elapsed time: " << elapsed << " seconds" << std::endl;
+                            }
 
-                            FROSCH_TIMER_START_LEVELID(timeFacesAGDSW7_loop_5,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW face functions (7): loop [5]");
-                            XMultiVectorPtr k_eR__inv_k_RR__k_Re__MV = MultiVectorFactory<SC,LO,GO,NO>::Build(k_eR->getRowMap(),numFaceNodes);
-                            k_eR->apply( *inv_k_RR__k_Re__MV, *k_eR__inv_k_RR__k_Re__MV );  // (*input,*solution)
+                            FROSCH_TIMER_START_LEVELID(timeInterfItemsAGDSW3_loop_3,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW interface-item functions (3): loop [3]");
+                            XMultiVectorPtr Ki_eR__inv_Ki_RR__Ki_Re__MV = MultiVectorFactory<SC,LO,GO,NO>::Build(Ki_eR->getRowMap(),numInterfItemNodes);
+                            Ki_eR->apply( *inv_Ki_RR__Ki_Re__MV, *Ki_eR__inv_Ki_RR__Ki_Re__MV );  // (*input,*solution)
 		    
-                            XMultiVectorPtr k_ee__MV = MultiVectorFactory<SC,LO,GO,NO>::Build(k_ee->getRowMap(),numFaceNodes);
-                            k_ee->apply( *id_e, *k_ee__MV );  // (*input,*solution)
+                            XMultiVectorPtr Ki_ee__MV = MultiVectorFactory<SC,LO,GO,NO>::Build(Ki_ee->getRowMap(),numInterfItemNodes);
+                            Ki_ee->apply( *identity_e, *Ki_ee__MV );  // (*input,*solution)
 	    
                             // This matrix will later store the local Schur complement.
                             // This Schur complement is the sum of subdomain-local Schur complements, e.g., S_ee__ij = S_ee_i + S_ee_j for an edge/face in two dimensions.
-                            XMultiVectorPtr s_ee__MV = MultiVectorFactory<SC,LO,GO,NO>::Build(k_ee->getRowMap(),numFaceNodes);
+                            XMultiVectorPtr S_ee__MV = MultiVectorFactory<SC,LO,GO,NO>::Build(Ki_ee->getRowMap(),numInterfItemNodes);
                             // this = gamma*this + alpha*A + beta*B
                             // update (alpha, A, beta, B, gamma)
-                            s_ee__MV->update(ScalarTraits<SC>::one(),*k_ee__MV,  -ScalarTraits<SC>::one(),*k_eR__inv_k_RR__k_Re__MV,  ScalarTraits<SC>::zero());
-                            // s_ee__MV should be the Schur complement with respect to one subdomain.
+                            S_ee__MV->update(ScalarTraits<SC>::one(),*Ki_ee__MV,  -ScalarTraits<SC>::one(),*Ki_eR__inv_Ki_RR__Ki_Re__MV,  ScalarTraits<SC>::zero());
+                            // S_ee__MV should be the Schur complement with respect to one subdomain.
                             // It will subsequently be added with the Schur complement from the other subdomain s.t. we obtain the matrix for the eigenvalue problem of the adaptive coarse space.
-                            evpLHSs.push_back(s_ee__MV);
-                            evpRHSs.push_back(k_ee__MV);
-                            FROSCH_TIMER_STOP(timeFacesAGDSW7_loop_5);
+                            evpLHSs.push_back(S_ee__MV);
+                            evpRHSs.push_back(Ki_ee__MV);
+                            FROSCH_TIMER_STOP(timeInterfItemsAGDSW3_loop_3);
 
+                            // In the following, the local Schur complements (from all subdomains 
+                            // adjacent to the item (e.g., the edge)) are added to obtain the item Schur 
+                            // complement. First, the local Schur complements are written to a repeated 
+                            // MultiVector. Then, an exporter sums the values on the interface to obtain
+                            // a uniquely distributed MultiVector.
+
+                            FROSCH_TIMER_START_LEVELID(timeInterfItemsAGDSW3_loop_4,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW interface-item functions (3): loop [4]");
+                            // Write subdomain matrices (Schur complement and Ki_ee) into index-repeated matrix. Later, these (differing) entries will be summed over.
                             // Copy data from local MultiVector to global distributed MultiVector.
                             // The global distributed MultiVector is repeated and the data each process holds is the same data that the local MultiVector holds.
                             // --> This is a completely local operation.
-                            Teuchos::RCP<Tpetra::MultiVector<SC, LO, GO, NO>> s_ee__MV__repeated = s_ee__MV__repeated__list.at(localInterfItemID);
-                            Teuchos::RCP<Tpetra::MultiVector<SC, LO, GO, NO>> k_ee__MV__repeated = k_ee__MV__repeated__list.at(localInterfItemID);
-//                            XMultiVectorPtr s_ee__MV = evpLHSs.at(localInterfItemID);
-//                            XMultiVectorPtr k_ee__MV = evpRHSs.at(localInterfItemID);
-                            for (int index_col = 0; index_col < numFaceNodes; index_col++) {
-                                for (int index_row = 0; index_row < numFaceNodes; index_row++) {
-                                    const SC val_s = s_ee__MV->getData(index_col)[index_row];
-                                    s_ee__MV__repeated->getDataNonConst(index_col)[index_row] = val_s;
+                            Teuchos::RCP<Tpetra::MultiVector<SC, LO, GO, NO>> S_ee__MV__repeated = S_ee__MV__repeated__list.at(localInterfItemID);
+                            Teuchos::RCP<Tpetra::MultiVector<SC, LO, GO, NO>> K_ee__MV__repeated = K_ee__MV__repeated__list.at(localInterfItemID);
+                            for (int index_col = 0; index_col < numInterfItemNodes; index_col++) {
+                                for (int index_row = 0; index_row < numInterfItemNodes; index_row++) {
+                                    const SC val_s = S_ee__MV->getData(index_col)[index_row];
+                                    S_ee__MV__repeated->getDataNonConst(index_col)[index_row] = val_s;
 
-                                    const SC val_k = k_ee__MV->getData(index_col)[index_row];
-                                    k_ee__MV__repeated->getDataNonConst(index_col)[index_row] = val_k;
+                                    const SC val_k = Ki_ee__MV->getData(index_col)[index_row];
+                                    K_ee__MV__repeated->getDataNonConst(index_col)[index_row] = val_k;
                                 }
                             }
+                            FROSCH_TIMER_STOP(timeInterfItemsAGDSW3_loop_4);
 
+                            FROSCH_TIMER_START_LEVELID(timeInterfItemsAGDSW3_loop_5,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW interface-item functions (3): loop [5] beginExport (sum of local matrices)");
+                            // beginExport from repeated to unique (add local Schur complements / sum over repeated (i.e., all) indices).
                             Teuchos::RCP<Tpetra::Export<LO, GO, NO>> exporter = exporter__list.at(localInterfItemID);
+                            Teuchos::RCP<Tpetra::MultiVector<SC, LO, GO, NO>> S_ee__MV__unique = S_ee__MV__unique__list.at(localInterfItemID);
+                            Teuchos::RCP<Tpetra::MultiVector<SC, LO, GO, NO>> K_ee__MV__unique = K_ee__MV__unique__list.at(localInterfItemID);
+                            S_ee__MV__unique->beginExport(*S_ee__MV__repeated, *exporter, Tpetra::ADD);
+                            K_ee__MV__unique->beginExport(*K_ee__MV__repeated, *exporter, Tpetra::ADD);
+                            FROSCH_TIMER_STOP(timeInterfItemsAGDSW3_loop_5);
+                        } // for: iterate over local interface items
+                        FROSCH_TIMER_STOP(timeInterfItemsAGDSW3_1);
 
-                            // Export the data (sum over repeated (i.e., all) indices).
-//                            Teuchos::RCP<Tpetra::MultiVector<SC, LO, GO, NO>> s_ee__MV__repeated = s_ee__MV__repeated__list.at(localInterfItemID);
-//                            Teuchos::RCP<Tpetra::MultiVector<SC, LO, GO, NO>> k_ee__MV__repeated = k_ee__MV__repeated__list.at(localInterfItemID);
-                            Teuchos::RCP<Tpetra::MultiVector<SC, LO, GO, NO>> s_ee__MV__unique = s_ee__MV__unique__list.at(localInterfItemID);
-                            Teuchos::RCP<Tpetra::MultiVector<SC, LO, GO, NO>> k_ee__MV__unique = k_ee__MV__unique__list.at(localInterfItemID);
-                            s_ee__MV__unique->beginExport(*s_ee__MV__repeated, *exporter, Tpetra::ADD);
-                            k_ee__MV__unique->beginExport(*k_ee__MV__repeated, *exporter, Tpetra::ADD);
-                        } // for: iterate over local faces
-                        if (addMPIBarriersForSomeTimers) this->MpiComm_->barrier();
-                        FROSCH_TIMER_STOP(timeFacesAGDSW7_loop);
-
-                        // In the following four loops, the local Schur complements (from all subdomains 
-                        // adjacent to the item (e.g., the edge)) are added to obtain the item Schur 
-                        // complement. First, the local Schur complements are written to a repeated 
-                        // MultiVector. Then, an exporter sums the values on the interface to obtain
-                        // a uniquely distributed MultiVector. This is then distributed back to a 
-                        // repeated MultiVector using an importer.
-
-                        FROSCH_TIMER_START_LEVELID(timeFacesAGDSW8_loop,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW face functions (8): sum over local schur complements");
-
-//                        FROSCH_TIMER_START_LEVELID(timeFacesAGDSW81_loop,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW face functions (8): [0] copy matrices locally");
-//                        // Write subdomain Schur complements into index-repeated matrix. Later, these (differing) entries will be summed over.
-//                        for (int localInterfItemID = 0; localInterfItemID < numFacesLocal; localInterfItemID++) {
-//
-//                            // TODO: Kann es sein, dass localEntityID und localInterfItemID gleich sind? Ist das gesichert? Eines basiert auf globaler Sortierung. Die lokale koennte anders sein.
-//                            LO localEntityID = localEntityIDsOfSubdomain.at(localInterfItemID);
-//                            const InterfaceEntityPtr entity_ptr = DDInterface_->getFaces()->getEntity(localEntityID);
-//                            int numFaceNodes = entity_ptr->getNumNodes();
-//
-//
-//            			}
-//                        if (addMPIBarriersForSomeTimers) this->MpiComm_->barrier();
-//                        FROSCH_TIMER_STOP(timeFacesAGDSW81_loop);
-
-//                        FROSCH_TIMER_START_LEVELID(timeFacesAGDSW81b_loop,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW face functions (8): [2] beginExport");
-////                        Teuchos::Array< Teuchos::RCP<Tpetra::Export<LO, GO, NO>> > exporter__list(0);
-//                        // beginExport loop: from repeated to unique (add local Schur complements)
-//                        for (int localInterfItemID = 0; localInterfItemID < numFacesLocal; localInterfItemID++) {
-////                            // Create exporter to copy the data from the global repeated MultiVector to the global unique MultiVector.
-////                            Teuchos::RCP<const Tpetra::Map<LO, GO, NO>> globalRepeatedMapForItem = itemMapsRepeated.at(localInterfItemID);
-////                            Teuchos::RCP<const Tpetra::Map<LO, GO, NO>> globalUniqueMapForItem = itemMapsUnique.at(localInterfItemID);
-////                            Teuchos::RCP<Tpetra::Export<LO, GO, NO>> exporter = Teuchos::rcp(new Tpetra::Export<LO, GO, NO>(globalRepeatedMapForItem, globalUniqueMapForItem));
-////                            exporter__list.push_back(exporter);
-//
-//                            Teuchos::RCP<Tpetra::Export<LO, GO, NO>> exporter = exporter__list.at(localInterfItemID);
-//
-//                            // Export the data (sum over repeated (i.e., all) indices).
-//                            Teuchos::RCP<Tpetra::MultiVector<SC, LO, GO, NO>> s_ee__MV__repeated = s_ee__MV__repeated__list.at(localInterfItemID);
-//                            Teuchos::RCP<Tpetra::MultiVector<SC, LO, GO, NO>> k_ee__MV__repeated = k_ee__MV__repeated__list.at(localInterfItemID);
-//                            Teuchos::RCP<Tpetra::MultiVector<SC, LO, GO, NO>> s_ee__MV__unique = s_ee__MV__unique__list.at(localInterfItemID);
-//                            Teuchos::RCP<Tpetra::MultiVector<SC, LO, GO, NO>> k_ee__MV__unique = k_ee__MV__unique__list.at(localInterfItemID);
-//                            s_ee__MV__unique->beginExport(*s_ee__MV__repeated, *exporter, Tpetra::ADD);
-//                            k_ee__MV__unique->beginExport(*k_ee__MV__repeated, *exporter, Tpetra::ADD);
-//                        }
-//                        if (addMPIBarriersForSomeTimers) this->MpiComm_->barrier();
-//                        FROSCH_TIMER_STOP(timeFacesAGDSW81b_loop);
-
-                        FROSCH_TIMER_START_LEVELID(timeFacesAGDSW82_loop,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW face functions (8): [3] endExport");
+                        FROSCH_TIMER_START_LEVELID(timeInterfItemsAGDSW3_2,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW interface-item functions (3): [2] endExport");
                         // endExport loop
-                        for (int localInterfItemID = 0; localInterfItemID < numFacesLocal; localInterfItemID++) {
+                        for (int localInterfItemID = 0; localInterfItemID < numInterfItemsLocal; localInterfItemID++) {
                             Teuchos::RCP<Tpetra::Export<LO, GO, NO>> exporter = exporter__list.at(localInterfItemID);
 
-                            Teuchos::RCP<Tpetra::MultiVector<SC, LO, GO, NO>> s_ee__MV__unique   = s_ee__MV__unique__list.at(localInterfItemID);
-                            Teuchos::RCP<Tpetra::MultiVector<SC, LO, GO, NO>> k_ee__MV__unique   = k_ee__MV__unique__list.at(localInterfItemID);
-                            Teuchos::RCP<Tpetra::MultiVector<SC, LO, GO, NO>> s_ee__MV__repeated = s_ee__MV__repeated__list.at(localInterfItemID);
-                            Teuchos::RCP<Tpetra::MultiVector<SC, LO, GO, NO>> k_ee__MV__repeated = k_ee__MV__repeated__list.at(localInterfItemID);
+                            Teuchos::RCP<Tpetra::MultiVector<SC, LO, GO, NO>> S_ee__MV__unique   = S_ee__MV__unique__list.at(localInterfItemID);
+                            Teuchos::RCP<Tpetra::MultiVector<SC, LO, GO, NO>> K_ee__MV__unique   = K_ee__MV__unique__list.at(localInterfItemID);
+                            Teuchos::RCP<Tpetra::MultiVector<SC, LO, GO, NO>> S_ee__MV__repeated = S_ee__MV__repeated__list.at(localInterfItemID);
+                            Teuchos::RCP<Tpetra::MultiVector<SC, LO, GO, NO>> K_ee__MV__repeated = K_ee__MV__repeated__list.at(localInterfItemID);
 
-                            s_ee__MV__unique->endExport(*s_ee__MV__repeated, *exporter, Tpetra::ADD);
-                            k_ee__MV__unique->endExport(*k_ee__MV__repeated, *exporter, Tpetra::ADD);
-                        }
+                            // TODO: Re-add the export of the Schur complements as an option.
+                            // Export edge Schur complements.
+                            // Xpetra::IO< SC, LO, GO, NO >::Write("S_ee__ij__e="+std::to_string(ii)+".txt", *S_ee__ij, true);
+                            // Teuchos::RCP< Xpetra::Map<LO,GO,NO> > interfItemNodeMap = MapFactory<LO,GO,NO>::Build(this->K_->getRowMap()->lib(),INVALID,itemNodesGlobalRepeated(),0,this->MpiComm_);
+                            // This does not extract the subdomain matrices but the matrices corresponding to the entity nodes.
+                            // ConstXMatrixPtr repeatedMatrixS__ = FROSch::ExtractLocalSubdomainMatrix(S_ee__ij.getConst(),interfItemNodeMap.getConst());
+                            // ConstXMatrixPtr repeatedMatrixKee__ = FROSch::ExtractLocalSubdomainMatrix(K_ee__ij.getConst(),interfItemNodeMap.getConst());
+
+                            S_ee__MV__unique->endExport(*S_ee__MV__repeated, *exporter, Tpetra::ADD);
+                            K_ee__MV__unique->endExport(*K_ee__MV__repeated, *exporter, Tpetra::ADD);
+                        } // for: iterate over local interface items
+                        FROSCH_TIMER_STOP(timeInterfItemsAGDSW3_2);
+
                         if (addMPIBarriersForSomeTimers) this->MpiComm_->barrier();
-                        FROSCH_TIMER_STOP(timeFacesAGDSW82_loop);
+                        FROSCH_TIMER_STOP(timeInterfItemsAGDSW3);
 
-                        FROSCH_TIMER_STOP(timeFacesAGDSW8_loop);
-
+                        FROSCH_TIMER_START_LEVELID(timeInterfItemsAGDSW4,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW interface-item functions (4): solve local, generalized eigenvalue problems");
                         // Solve eigenvalue problems.
-                        FROSCH_TIMER_START_LEVELID(timeFacesAGDSW9_loop,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW face functions (9): solve all local EVPs");
                         Teuchos::RCP< Teuchos::SerialDenseMatrix< LO, SC > > schur_ptr;
                         Teuchos::RCP< Teuchos::SerialDenseMatrix< LO, SC > > matrixB_ptr;
         				Teuchos::Array<Teuchos::RCP<GOVec> > allLocalToGlobalVectors(numInterfItems_global);
                         std::vector<int> numEigVec__list(0);
-                        int numInterfFnOnRank = 0;               // total number of functions on current rank (managed or not)
+                        int numInterfFnOnRank = 0;         // total number of functions on current rank (managed or not)
                         int numInterfFnHandledByRoot = 0;  // number of functions managed by current rank
                         Teuchos::Array< Teuchos::RCP< Teuchos::SerialDenseMatrix<LO,SC> > > eigenvectors_ptr__list(0);
 
                         // The following list stores the eigenvectors that are selected and that were computed on the current rank.
                         // Eigenvalue problems are only solved on one rank; only this rank will store the selected eigenvectors in the following list.
                         // (Only the rank with ID 0 within the neighborhood communicator will solve the respective eigenvalue problem.)
-                        // Note that there also exists a MultiVector (assembledListOfConstructedInterfFnOfRank) that contains all selected eigenvectors, i.e., after they have been shared with the respective neighboring subdomains (and also after they have been extended by zero to the remaining local interface).
+                        // Note that there also exists a MultiVector (assembledListOfConstructedInterfFnOfRank) that contains all selected eigenvectors, i.e., 
+                        // after they have been shared with the respective neighboring subdomains (and also after they have been extended by zero to the remaining local interface).
                         Teuchos::Array< LOVec > selectedEigenvectorsOfRank__list(0);
 
-                        for (int localInterfItemID = 0; localInterfItemID < numFacesLocal; localInterfItemID++) {
+                        for (int localInterfItemID = 0; localInterfItemID < numInterfItemsLocal; localInterfItemID++) {
                             Teuchos::RCP< const Teuchos::Comm<int> > commNeighborsOfInterfItem = subcomms.at(localInterfItemID);
-                            GO globalFaceID = globalFaceIDsOfSubdomain.at(localInterfItemID); // $$$
 
-                            // TODO: Kann es sein, dass localEntityID und localInterfItemID gleich sind? Ist das gesichert? Eines basiert auf globaler Sortierung. Die lokale koennte anders sein.
+                            // It might be that localEntityID and localInterfItemID are the same.
+                            // But since they are defined in different places, the definition might change for one.
+                            // The order of localEntityIDsOfSubdomain is based on the global order; i.e., 
+                            // localEntityIDsOfSubdomain(i) < localEntityIDsOfSubdomain(j) for i < j.
                             LO localEntityID = localEntityIDsOfSubdomain.at(localInterfItemID);
                             const InterfaceEntityPtr entity_ptr = DDInterface_->getFaces()->getEntity(localEntityID);
-                            int numFaceNodes = entity_ptr->getNumNodes(); // $$$
 
                             Teuchos::RCP< std::vector<SC> > eigenvalues_ptr;
                             Teuchos::RCP< Teuchos::SerialDenseMatrix<LO,SC> > eigenvectors_ptr;
@@ -1002,24 +970,13 @@ namespace FROSch {
                             // ordered eigenfunctions on the associated MPI ranks. This will break the coarse space.
                             // Lastly, this simplifies the storage of eigenfunctions later on.
                             if (commNeighborsOfInterfItem->getRank() == rootRankOfNeighborhood) {
-                                FROSCH_TIMER_START_LEVELID(timeFacesAGDSW9_loop_1,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW face functions (9): loop [1]");
+                                Teuchos::RCP<Tpetra::MultiVector<SC, LO, GO, NO>> S_ee__MV__unique = S_ee__MV__unique__list.at(localInterfItemID);
+                                Teuchos::RCP<Tpetra::MultiVector<SC, LO, GO, NO>> K_ee__MV__unique = K_ee__MV__unique__list.at(localInterfItemID);
 
-                                // TODO: Re-add the export of the Schur complements as an option.
-                                // Export edge Schur complements.
-                                // Xpetra::IO< SC, LO, GO, NO >::Write("s_ee__ij__e="+std::to_string(ii)+".txt", *s_ee__ij, true);
-                                // Teuchos::RCP< Xpetra::Map<LO,GO,NO> > faceNodeMap = MapFactory<LO,GO,NO>::Build(this->K_->getRowMap()->lib(),INVALID,itemNodesGlobalRepeated(),0,this->MpiComm_);
-                                // This does not extract the subdomain matrices but the matrices corresponding to the entity nodes.
-                                // ConstXMatrixPtr repeatedMatrixS__ = FROSch::ExtractLocalSubdomainMatrix(s_ee__ij.getConst(),faceNodeMap.getConst());
-                                // ConstXMatrixPtr repeatedMatrixKee__ = FROSch::ExtractLocalSubdomainMatrix(k_ee__ij.getConst(),faceNodeMap.getConst());
+                                schur_ptr = FROSch::convert_GlobalTMultiVector_to_SerialDenseMatrix(S_ee__MV__unique.getConst());
+                                matrixB_ptr = FROSch::convert_GlobalTMultiVector_to_SerialDenseMatrix(K_ee__MV__unique.getConst());
 
-                                Teuchos::RCP<Tpetra::MultiVector<SC, LO, GO, NO>> s_ee__MV__unique = s_ee__MV__unique__list.at(localInterfItemID);
-                                Teuchos::RCP<Tpetra::MultiVector<SC, LO, GO, NO>> k_ee__MV__unique = k_ee__MV__unique__list.at(localInterfItemID);
-
-                                schur_ptr = FROSch::convert_GlobalTMultiVector_to_SerialDenseMatrix(s_ee__MV__unique.getConst());
-                                matrixB_ptr = FROSch::convert_GlobalTMultiVector_to_SerialDenseMatrix(k_ee__MV__unique.getConst());
-                                FROSCH_TIMER_STOP(timeFacesAGDSW9_loop_1);
-
-                                FROSCH_TIMER_START_LEVELID(timeFacesAGDSW9_loop_2,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW face functions (9): loop [2] EVP Solving");
+                                FROSCH_TIMER_START_LEVELID(timeInterfItemsAGDSW4_loop,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW interface-item functions (4): loop: generalized EVP solver");
                                 // Solve SchurComplement * x = lambda * B * x.
                                 using Matrix_Dense_ptr = Teuchos::RCP< Teuchos::SerialDenseMatrix< LO, SC > >;
                                 FROSch::EigenSolverFactory<Matrix_Dense_ptr , Matrix_Dense_ptr>::Solve(
@@ -1028,9 +985,8 @@ namespace FROSch {
                                     parameterList_adaptiveProblems,
                                     eigenvalues_ptr,
                                     eigenvectors_ptr);
-                                FROSCH_TIMER_STOP(timeFacesAGDSW9_loop_2);
+                                FROSCH_TIMER_STOP(timeInterfItemsAGDSW4_loop);
 
-                                FROSCH_TIMER_START_LEVELID(timeFacesAGDSW9_loop_3,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW face functions (9): loop [3]");
                                 // Determine which eigenvectors should be selected, based on the user-prescribed tolerance.
                                 const double tol = parameterList_adaptiveProblems->get("Tolerance for the selection of functions", 0.01);
                                 for (LO kk = 0; kk < (LO)eigenvalues_ptr->size(); kk++) {
@@ -1047,16 +1003,16 @@ namespace FROSch {
 
                                 eigenvectors_ptr__list.push_back(eigenvectors_ptr);
                                 selectedEigenvectorsOfRank__list.push_back(sel);
-                                FROSCH_TIMER_STOP(timeFacesAGDSW9_loop_3);
                             } else {
                                 eigenvectors_ptr__list.push_back(Teuchos::null);
                                 selectedEigenvectorsOfRank__list.push_back(LOVec(0));
                             }
                             numEigVec__list.push_back(numEigVecToSelect);
-                        }
+                        } // for: iterate over local interface items
 
+                        FROSCH_TIMER_START_LEVELID(timeInterfItemsAGDSW4_2,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW interface-item functions (4): [2] broadcast selected number of eigenvectors");
                         // Broadcast selected number of eigenvectors to all affected subdomains / cores.
-                        for (int localInterfItemID = 0; localInterfItemID < numFacesLocal; localInterfItemID++) {
+                        for (int localInterfItemID = 0; localInterfItemID < numInterfItemsLocal; localInterfItemID++) {
                             Teuchos::RCP< const Teuchos::Comm<int> > commNeighborsOfInterfItem = subcomms.at(localInterfItemID);
                             int numEigVecToSelect = numEigVec__list.at(localInterfItemID);
                             Teuchos::broadcast<int, int>(*commNeighborsOfInterfItem, rootRankOfNeighborhood, 1, &numEigVecToSelect);
@@ -1066,21 +1022,22 @@ namespace FROSch {
                             if ((numEigVecToSelect == 0) && (parameterList_adaptiveProblems->get("Include GDSW functions", false))) {
                                 numInterfFnOnRank += 1;
                             }
-                        }
+                        } // for: iterate over local interface items
+                        FROSCH_TIMER_STOP(timeInterfItemsAGDSW4_2);
 
                         if (addMPIBarriersForSomeTimers) this->MpiComm_->barrier();
-                        FROSCH_TIMER_STOP(timeFacesAGDSW9_loop);
+                        FROSCH_TIMER_STOP(timeInterfItemsAGDSW4);
 
-                        FROSCH_TIMER_START_LEVELID(timeFacesAGDSW10_loop,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW face functions (10): compute offsets");
+                        FROSCH_TIMER_START_LEVELID(timeInterfItemsAGDSW5,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW interface-item functions (5): compute global offsets of eigenvectors");
                         // Since the selected eigenvectors overlap (are generally shared by multiple subdomains), 
                         // above, we have computed the sum of the numbers of only those selected eigenvectors that are held
                         // on rank 0 (within the neighborhood communicator).
                         // Now, we can compute the cumulative sum across all ranks (of the neighborhood communicator).
                         // This will give us an offset, in which column the eigenvectors shall be stored globally (i.e., the ID of the corresponding coarse function).
                         int cumsum = -1;
-                        FROSCH_TIMER_START_LEVELID(timeFacesAGDSW10a_loop,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW face functions (10a): cumsum");
+                        FROSCH_TIMER_START_LEVELID(timeInterfItemsAGDSW5_1,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW interface-item functions (5): [1] cumsum");
                         Teuchos::scan<int, int>(*(this->MpiComm_), Teuchos::REDUCE_SUM, numInterfFnHandledByRoot, Teuchos::outArg(cumsum));
-                        FROSCH_TIMER_STOP(timeFacesAGDSW10a_loop);
+                        FROSCH_TIMER_STOP(timeInterfItemsAGDSW5_1);
                         const int globalOffsetOfRank = cumsum - numInterfFnHandledByRoot;
 
                         // Compute global offset per item.
@@ -1091,7 +1048,7 @@ namespace FROSch {
                         // what the offset should be.
                         int globalOffsetOfInterfItemComputedOnCurRank = globalOffsetOfRank; // relates only to the items whos eigenvalue problem is solved on the current rank
                         std::vector<int> globalOffsetOfInterfItemOfRank__list(0);
-                        for (int localInterfItemID = 0; localInterfItemID < numFacesLocal; localInterfItemID++) {
+                        for (int localInterfItemID = 0; localInterfItemID < numInterfItemsLocal; localInterfItemID++) {
                             Teuchos::RCP< const Teuchos::Comm<int> > commNeighborsOfInterfItem = subcomms.at(localInterfItemID);
                             int globalOffsetOfInterfItemOfRank = -1;
                             if (commNeighborsOfInterfItem->getRank() == rootRankOfNeighborhood) {
@@ -1105,11 +1062,11 @@ namespace FROSch {
                             }
                             Teuchos::broadcast<int, int>(*commNeighborsOfInterfItem, rootRankOfNeighborhood, 1, &globalOffsetOfInterfItemOfRank);
                             globalOffsetOfInterfItemOfRank__list.push_back(globalOffsetOfInterfItemOfRank);
-                        }
+                        } // for: iterate over local interface items
                         if (addMPIBarriersForSomeTimers) this->MpiComm_->barrier();
-                        FROSCH_TIMER_STOP(timeFacesAGDSW10_loop);
+                        FROSCH_TIMER_STOP(timeInterfItemsAGDSW5);
 
-                        FROSCH_TIMER_START_LEVELID(timeFacesAGDSW11_loop,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW face functions (11): store functions");
+                        FROSCH_TIMER_START_LEVELID(timeInterfItemsAGDSW6,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW interface-item functions (6): share and store eigenvectors");
 
                         // Create a (serial) MultiVector for the interface on the current rank (if the number of coarse functions to be created is > 0).
                         if (numInterfFnOnRank > 0) {
@@ -1125,7 +1082,7 @@ namespace FROSch {
 
                         // Share selected eigenvectors with associated subdomains/ranks (they were computed only on one rank), 
                         // extend them by zero to the local interface, and store everything in a MultiVector.
-                        for (int localInterfItemID = 0; localInterfItemID < numFacesLocal; localInterfItemID++) {
+                        for (int localInterfItemID = 0; localInterfItemID < numInterfItemsLocal; localInterfItemID++) {
 
                             int numEigVecToSelect = numEigVec__list[localInterfItemID];
                             Teuchos::RCP< const Teuchos::Comm<int> > commNeighborsOfInterfItem = subcomms.at(localInterfItemID);
@@ -1133,7 +1090,7 @@ namespace FROSch {
 
                             LO localEntityID = localEntityIDsOfSubdomain.at(localInterfItemID);
                             const InterfaceEntityPtr entity_ptr = DDInterface_->getFaces()->getEntity(localEntityID);
-                            int numFaceNodes = entity_ptr->getNumNodes();
+                            int numInterfItemNodes = entity_ptr->getNumNodes();
 
                             // Each MPI rank needs to have access to the eigenvectors.
                             // In the following, we will extract the selected eigenvectors, store them in a uniquely-distributed MultiVector, 
@@ -1151,6 +1108,7 @@ namespace FROSch {
 
                                     LOVec sel = selectedEigenvectorsOfRank__list.at(localInterfItemID);
 
+                                    // TODO: Implement some output for eigenvalues. Statistics into stdout and all eigenvalues into text file?
                                     // std::this_thread::sleep_for(std::chrono::nanoseconds(50000));
                                     // Teuchos::RCP< const Teuchos::Comm<int> > commNeighborsOfInterfItem = subcomms.at(localInterfItemID);
                                     // commNeighborsOfInterfItem->barrier();
@@ -1167,7 +1125,7 @@ namespace FROSch {
                                     // using a "unique-map to repeated-map" distribution (Tpetra Import).
                                     for (int index_eigenvec = 0; index_eigenvec < numEigVecToSelect; index_eigenvec++) {
                                         int index_col = sel[index_eigenvec];
-                                        for (int index_row = 0; index_row < numFaceNodes; index_row++) {
+                                        for (int index_row = 0; index_row < numInterfItemNodes; index_row++) {
                                             const SC val = (*eigenvectors_ptr)(index_row, index_col);
                                             selectedEigenvectors__MV__unique->getDataNonConst(index_eigenvec)[index_row] = val;
                                         }
@@ -1181,9 +1139,9 @@ namespace FROSch {
 
                             selectedEigenvectors__MV__unique__list.push_back(selectedEigenvectors__MV__unique);
                             selectedEigenvectors__MV__repeated__list.push_back(selectedEigenvectors__MV__repeated);
-                        } // for: iterate over local faces
+                        } // for: iterate over local interface items
 
-                        for (int localInterfItemID = 0; localInterfItemID < numFacesLocal; localInterfItemID++) {
+                        for (int localInterfItemID = 0; localInterfItemID < numInterfItemsLocal; localInterfItemID++) {
 
                             int numEigVecToSelect = numEigVec__list[localInterfItemID];
                             if (numEigVecToSelect > 0) {
@@ -1194,7 +1152,7 @@ namespace FROSch {
                                 Teuchos::RCP<Tpetra::Import<LO, GO, NO>> importer = importer__list.at(localInterfItemID);
                                 selectedEigenvectors__MV__repeated->endImport(*selectedEigenvectors__MV__unique, *importer, Tpetra::INSERT);
                             }
-                        } // for: iterate over local faces
+                        } // for: iterate over local interface items
 
                         // If the current rank/subdomain has, for example, three edges with the respective sets of 
                         // selected eigenvectors S1 = (s11,s12,...,s1a), S2 = (s21,s22,...,s2b), S3 = (s31,s32,...,s3c),
@@ -1202,12 +1160,12 @@ namespace FROSch {
                         // The local offset is then, for example, a+b+1 for s31 (for one-based indices).
                         int localOffsetOfInterfItemOfRank = 0;
 
-                        for (int localInterfItemID = 0; localInterfItemID < numFacesLocal; localInterfItemID++) {
+                        for (int localInterfItemID = 0; localInterfItemID < numInterfItemsLocal; localInterfItemID++) {
 
                             int numEigVecToSelect = numEigVec__list[localInterfItemID];
                             LO localEntityID = localEntityIDsOfSubdomain.at(localInterfItemID);
                             const InterfaceEntityPtr entity_ptr = DDInterface_->getFaces()->getEntity(localEntityID);
-                            int numFaceNodes = entity_ptr->getNumNodes();
+                            int numInterfItemNodes = entity_ptr->getNumNodes();
 
                             // If eigenvectors were selected, store them in the MultiVector. Otherwise check whether the GDSW function should be constructed and stored.
                             if (numEigVecToSelect > 0) {
@@ -1216,7 +1174,7 @@ namespace FROSch {
                                     FROSch::convert_GlobalTMultiVector_to_SerialDenseMatrix(selectedEigenvectors__MV__repeated.getConst());
 
                                 for (int eigfn = 0; eigfn < numEigVecToSelect; eigfn++) {
-                                    for (int j = 0; j < numFaceNodes; j++) {
+                                    for (int j = 0; j < numInterfItemNodes; j++) {
                                         assembledListOfConstructedInterfFnOfRank[0]->replaceLocalValue( entity_ptr->getGammaDofID(j,0), localOffsetOfInterfItemOfRank + eigfn, (*selectedEigenvectors_ptr)(j,eigfn) );
                                     }
                                     localInterfFnIDToGlobalCoarseFnID->push_back(globalOffsetOfInterfItemOfRank__list[localInterfItemID] + eigfn);
@@ -1224,25 +1182,24 @@ namespace FROSch {
                                 localOffsetOfInterfItemOfRank += numEigVecToSelect;
                             } else {
                                 if (parameterList_adaptiveProblems->get("Include GDSW functions", false)) {
-                                    for (int j = 0; j < numFaceNodes; j++) {
+                                    for (int j = 0; j < numInterfItemNodes; j++) {
                                         assembledListOfConstructedInterfFnOfRank[0]->replaceLocalValue( entity_ptr->getGammaDofID(j,0), localOffsetOfInterfItemOfRank, ScalarTraits<SC>::one() );
                                     }
                                     localInterfFnIDToGlobalCoarseFnID->push_back(globalOffsetOfInterfItemOfRank__list[localInterfItemID]);
                                     localOffsetOfInterfItemOfRank += 1;
                                 }
                             }
-                        } // for: iterate over local faces
+                        } // for: iterate over local interface items
 
                         // Store interface coarse space.
                         const GO INVALID = Teuchos::OrdinalTraits<GO>::invalid();
-                        ConstXMapPtr facesEntityMap = MapFactory<LO,GO,NO>::Build(this->K_->getRowMap()->lib(),INVALID,*localInterfFnIDToGlobalCoarseFnID(),0,this->MpiComm_);
-                        //std::cout << this->MpiComm_->getRank() << "  " << assembledListOfConstructedInterfFnOfRank[0]->getNumVectors() << "  " << facesEntityMap->getLocalNumElements() << std::endl;
-                        this->InterfaceCoarseSpaces_[blockId]->addSubspace(facesEntityMap,null,assembledListOfConstructedInterfFnOfRank[0]);
+                        ConstXMapPtr interfItemsEntityMap = MapFactory<LO,GO,NO>::Build(this->K_->getRowMap()->lib(),INVALID,*localInterfFnIDToGlobalCoarseFnID(),0,this->MpiComm_);
+                        this->InterfaceCoarseSpaces_[blockId]->addSubspace(interfItemsEntityMap,null,assembledListOfConstructedInterfFnOfRank[0]);
 
                         if (addMPIBarriersForSomeTimers) this->MpiComm_->barrier();
-                        FROSCH_TIMER_STOP(timeFacesAGDSW11_loop);
+                        FROSCH_TIMER_STOP(timeInterfItemsAGDSW6);
 
-                        FROSCH_TIMER_STOP(timeFacesAGDSW);
+                        FROSCH_TIMER_STOP(timeInterfItemsAGDSW);
                     }
 
                     if (useFaceRotations) {
@@ -1254,7 +1211,6 @@ namespace FROSch {
                     }
 
                     this->InterfaceCoarseSpaces_[blockId]->assembleCoarseSpace();
-//                    this->InterfaceCoarseSpaces_[blockId]->assembleCoarseSpaceT();
 
                     if (this->Verbose_) {
                         cout
