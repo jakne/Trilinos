@@ -565,9 +565,9 @@ namespace FROSch {
                         //       However, when the interface component is a vertex, I can skip computing the eigenvalue problem.
                         //       I can also implement an option to replace an interface component of two degrees of freedom (or more?) with a vertices.
 
-                        FROSCH_TIMER_START_LEVELID(timeInterfItemsAGDSW,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW interface-item functions");
+                        FROSCH_TIMER_START_LEVELID(timeInterfItemsAGDSW,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW");
 
-                        FROSCH_TIMER_START_LEVELID(timeInterfItemsAGDSW1,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW interface-item functions (1)");
+                        FROSCH_TIMER_START_LEVELID(timeInterfItemsAGDSW1,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW (1)");
                         Teuchos::RCP<Teuchos::ParameterList> parameterList_adaptiveProblems = Teuchos::sublist(this->ParameterList_, "Adaptive problems");
                         const bool addMPIBarriersForSomeTimers = parameterList_adaptiveProblems->get("Add MPI barriers for some timers", true);
 
@@ -684,7 +684,7 @@ namespace FROSch {
                         if (addMPIBarriersForSomeTimers) this->MpiComm_->barrier();
                         FROSCH_TIMER_STOP(timeInterfItemsAGDSW1);
 
-                        FROSCH_TIMER_START_LEVELID(timeInterfItemsAGDSW2,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW interface-item functions (2): maps, MultiVectors, exporter, importer");
+                        FROSCH_TIMER_START_LEVELID(timeInterfItemsAGDSW2,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW (2): maps, MultiVectors, exporter, importer");
                         // Create maps for the DOFs of an item (e.g., of an edge)
                         Teuchos::Array< Teuchos::RCP<const Tpetra::Map<LO, GO, NO>> > itemMapsRepeated(0), itemMapsUnique(0);
                         Teuchos::Array< Teuchos::RCP<Tpetra::MultiVector<SC, LO, GO, NO>> > S_ee__MV__unique__list(0),   K_ee__MV__unique__list;
@@ -785,14 +785,14 @@ namespace FROSch {
                         if (addMPIBarriersForSomeTimers) this->MpiComm_->barrier();
                         FROSCH_TIMER_STOP(timeInterfItemsAGDSW2);
 
-                        FROSCH_TIMER_START_LEVELID(timeInterfItemsAGDSW3,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW interface-item functions (3): Assemble generalized eigenvalue problem");
+                        FROSCH_TIMER_START_LEVELID(timeInterfItemsAGDSW3,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW (3): Assemble generalized eigenvalue problem");
 
-                        FROSCH_TIMER_START_LEVELID(timeInterfItemsAGDSW3_1,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW interface-item functions (3): [1] Compute locala contributions and beginExport");
+                        FROSCH_TIMER_START_LEVELID(timeInterfItemsAGDSW3_1,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW (3): [1] Compute local contributions and beginExport");
                         // Compute local contributions to eigenvalue problem and then start communicating the result via beginExport (non-blocking MPI).
                         Teuchos::Array<XMultiVectorPtr> evpRHSs(0);
                         Teuchos::Array<XMultiVectorPtr> evpLHSs(0);
                         for (int localInterfItemID = 0; localInterfItemID < numInterfItemsLocal; localInterfItemID++) {
-                            FROSCH_TIMER_START_LEVELID(timeInterfItemsAGDSW3_loop_1,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW interface-item functions (3): loop [1]");
+                            FROSCH_TIMER_START_LEVELID(timeInterfItemsAGDSW3_loop_1,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW (3): loop [1]");
                             LO localEntityID = localEntityIDsOfSubdomain.at(localInterfItemID);
                             std::vector<GO> itemNodes = collection_itemNodes.at(localInterfItemID);
 
@@ -811,6 +811,12 @@ namespace FROSch {
 
                             XMatrixPtr Ki_ee, Ki_RR, Ki_Re, Ki_eR;
                             FROSch::BuildSubmatrices(repeatedMatrix.getConst(),indicesR(),Ki_RR,Ki_Re,Ki_eR,Ki_ee);
+                            const GO globalInterfItemID = globalInterfItemIDsOfSubdomain.at(localInterfItemID);
+                            if (parameterList_adaptiveProblems->get("Print nnz of extension matrix", false)) {
+                                std::cout << "Rank " << this->MpiComm_->getRank() 
+                                          << "  Interf. item ID (local/global) " << localInterfItemID << "/" << globalInterfItemID
+                                          << "  Ki_RR: nnz = " << Ki_RR->getGlobalNumEntries() << std::endl;
+                            }
 
                             // FROSch::debug::printMap(Ki_ee->getRowMap(),"kee row map",__FILE__,__LINE__);
                             // FROSch::debug::printMap(globalRepeatedMapForItem,"item repeated map",__FILE__,__LINE__);
@@ -829,7 +835,7 @@ namespace FROSch {
                             Ki_Re->apply( *identity_e, *Ki_Re__MV );  // (*input,*solution)
                             FROSCH_TIMER_STOP(timeInterfItemsAGDSW3_loop_1);
 
-                            FROSCH_TIMER_START_LEVELID(timeInterfItemsAGDSW3_loop_2,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW interface-item functions (3): loop [2] operator-harmonic extension");
+                            FROSCH_TIMER_START_LEVELID(timeInterfItemsAGDSW3_loop_2,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW (3): loop [2] operator-harmonic extension");
                             // Solve Ki_RR * X = Ki_Re__MV.
                             // --> inv_Ki_RR__Ki_Re__MV := X.
                             const double t_start = MPI_Wtime();
@@ -844,15 +850,14 @@ namespace FROSch {
                             const double t_end = MPI_Wtime();
                             FROSCH_TIMER_STOP(timeInterfItemsAGDSW3_loop_2);
                             const double elapsed = t_end - t_start;
-                            const GO globalInterfItemID = globalInterfItemIDsOfSubdomain.at(localInterfItemID);
                             if (parameterList_adaptiveProblems->get("Print detailed extension times", false)) {
                                 std::cout << std::fixed << std::setprecision(3);
                                 std::cout << "Operator-harmonic extension. Rank " << this->MpiComm_->getRank() 
-                                          << "  Interf. Item (local/global) " << localInterfItemID << "/" << globalInterfItemID
+                                          << "  Interf. item ID (local/global) " << localInterfItemID << "/" << globalInterfItemID
                                           << " elapsed time: " << elapsed << " seconds" << std::endl;
                             }
 
-                            FROSCH_TIMER_START_LEVELID(timeInterfItemsAGDSW3_loop_3,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW interface-item functions (3): loop [3]");
+                            FROSCH_TIMER_START_LEVELID(timeInterfItemsAGDSW3_loop_3,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW (3): loop [3]");
                             XMultiVectorPtr Ki_eR__inv_Ki_RR__Ki_Re__MV = MultiVectorFactory<SC,LO,GO,NO>::Build(Ki_eR->getRowMap(),numInterfItemNodes);
                             Ki_eR->apply( *inv_Ki_RR__Ki_Re__MV, *Ki_eR__inv_Ki_RR__Ki_Re__MV );  // (*input,*solution)
 		    
@@ -877,7 +882,7 @@ namespace FROSch {
                             // MultiVector. Then, an exporter sums the values on the interface to obtain
                             // a uniquely distributed MultiVector.
 
-                            FROSCH_TIMER_START_LEVELID(timeInterfItemsAGDSW3_loop_4,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW interface-item functions (3): loop [4]");
+                            FROSCH_TIMER_START_LEVELID(timeInterfItemsAGDSW3_loop_4,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW (3): loop [4]");
                             // Write subdomain matrices (Schur complement and Ki_ee) into index-repeated matrix. Later, these (differing) entries will be summed over.
                             // Copy data from local MultiVector to global distributed MultiVector.
                             // The global distributed MultiVector is repeated and the data each process holds is the same data that the local MultiVector holds.
@@ -895,7 +900,7 @@ namespace FROSch {
                             }
                             FROSCH_TIMER_STOP(timeInterfItemsAGDSW3_loop_4);
 
-                            FROSCH_TIMER_START_LEVELID(timeInterfItemsAGDSW3_loop_5,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW interface-item functions (3): loop [5] beginExport (sum of local matrices)");
+                            FROSCH_TIMER_START_LEVELID(timeInterfItemsAGDSW3_loop_5,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW (3): loop [5] beginExport (sum of local matrices)");
                             // beginExport from repeated to unique (add local Schur complements / sum over repeated (i.e., all) indices).
                             Teuchos::RCP<Tpetra::Export<LO, GO, NO>> exporter = exporter__list.at(localInterfItemID);
                             Teuchos::RCP<Tpetra::MultiVector<SC, LO, GO, NO>> S_ee__MV__unique = S_ee__MV__unique__list.at(localInterfItemID);
@@ -906,7 +911,7 @@ namespace FROSch {
                         } // for: iterate over local interface items
                         FROSCH_TIMER_STOP(timeInterfItemsAGDSW3_1);
 
-                        FROSCH_TIMER_START_LEVELID(timeInterfItemsAGDSW3_2,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW interface-item functions (3): [2] endExport");
+                        FROSCH_TIMER_START_LEVELID(timeInterfItemsAGDSW3_2,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW (3): [2] endExport");
                         // endExport loop
                         for (int localInterfItemID = 0; localInterfItemID < numInterfItemsLocal; localInterfItemID++) {
                             Teuchos::RCP<Tpetra::Export<LO, GO, NO>> exporter = exporter__list.at(localInterfItemID);
@@ -932,7 +937,7 @@ namespace FROSch {
                         if (addMPIBarriersForSomeTimers) this->MpiComm_->barrier();
                         FROSCH_TIMER_STOP(timeInterfItemsAGDSW3);
 
-                        FROSCH_TIMER_START_LEVELID(timeInterfItemsAGDSW4,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW interface-item functions (4): solve local, generalized eigenvalue problems");
+                        FROSCH_TIMER_START_LEVELID(timeInterfItemsAGDSW4,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW (4): solve local, generalized eigenvalue problems");
                         // Solve eigenvalue problems.
                         Teuchos::RCP< Teuchos::SerialDenseMatrix< LO, SC > > schur_ptr;
                         Teuchos::RCP< Teuchos::SerialDenseMatrix< LO, SC > > matrixB_ptr;
@@ -976,7 +981,7 @@ namespace FROSch {
                                 schur_ptr = FROSch::convert_GlobalTMultiVector_to_SerialDenseMatrix(S_ee__MV__unique.getConst());
                                 matrixB_ptr = FROSch::convert_GlobalTMultiVector_to_SerialDenseMatrix(K_ee__MV__unique.getConst());
 
-                                FROSCH_TIMER_START_LEVELID(timeInterfItemsAGDSW4_loop,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW interface-item functions (4): loop: generalized EVP solver");
+                                FROSCH_TIMER_START_LEVELID(timeInterfItemsAGDSW4_loop,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW (4): loop: generalized EVP solver");
                                 // Solve SchurComplement * x = lambda * B * x.
                                 using Matrix_Dense_ptr = Teuchos::RCP< Teuchos::SerialDenseMatrix< LO, SC > >;
                                 FROSch::EigenSolverFactory<Matrix_Dense_ptr , Matrix_Dense_ptr>::Solve(
@@ -996,6 +1001,17 @@ namespace FROSch {
                                     }
                                 }
 
+                                // TODO: Implement some output for eigenvalues. Statistics into stdout and all eigenvalues into text file?
+                                // std::this_thread::sleep_for(std::chrono::nanoseconds(50000));
+                                // Teuchos::RCP< const Teuchos::Comm<int> > commNeighborsOfInterfItem = subcomms.at(localInterfItemID);
+                                // commNeighborsOfInterfItem->barrier();
+                                // std::cout << "Eigenvalues: " << std::endl;
+                                // for (LO kk = 0; kk < (LO)eigenvalues_ptr->size(); kk++) {
+                                //     std::cout << "i = " << kk << ": " << (*eigenvalues_ptr)[kk] << std::endl;
+                                // }
+                                // std::this_thread::sleep_for(std::chrono::nanoseconds(50000));
+                                // commNeighborsOfInterfItem->barrier();
+
                                 numInterfFnHandledByRoot += numEigVecToSelect;
                                 if ((numEigVecToSelect == 0) && (parameterList_adaptiveProblems->get("Include GDSW functions", false))) {
                                     numInterfFnHandledByRoot += 1;
@@ -1010,7 +1026,7 @@ namespace FROSch {
                             numEigVec__list.push_back(numEigVecToSelect);
                         } // for: iterate over local interface items
 
-                        FROSCH_TIMER_START_LEVELID(timeInterfItemsAGDSW4_2,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW interface-item functions (4): [2] broadcast selected number of eigenvectors");
+                        FROSCH_TIMER_START_LEVELID(timeInterfItemsAGDSW4_2,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW (4): [2] broadcast selected number of eigenvectors");
                         // Broadcast selected number of eigenvectors to all affected subdomains / cores.
                         for (int localInterfItemID = 0; localInterfItemID < numInterfItemsLocal; localInterfItemID++) {
                             Teuchos::RCP< const Teuchos::Comm<int> > commNeighborsOfInterfItem = subcomms.at(localInterfItemID);
@@ -1028,14 +1044,14 @@ namespace FROSch {
                         if (addMPIBarriersForSomeTimers) this->MpiComm_->barrier();
                         FROSCH_TIMER_STOP(timeInterfItemsAGDSW4);
 
-                        FROSCH_TIMER_START_LEVELID(timeInterfItemsAGDSW5,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW interface-item functions (5): compute global offsets of eigenvectors");
+                        FROSCH_TIMER_START_LEVELID(timeInterfItemsAGDSW5,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW (5): compute global offsets of eigenvectors");
                         // Since the selected eigenvectors overlap (are generally shared by multiple subdomains), 
                         // above, we have computed the sum of the numbers of only those selected eigenvectors that are held
                         // on rank 0 (within the neighborhood communicator).
                         // Now, we can compute the cumulative sum across all ranks (of the neighborhood communicator).
                         // This will give us an offset, in which column the eigenvectors shall be stored globally (i.e., the ID of the corresponding coarse function).
                         int cumsum = -1;
-                        FROSCH_TIMER_START_LEVELID(timeInterfItemsAGDSW5_1,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW interface-item functions (5): [1] cumsum");
+                        FROSCH_TIMER_START_LEVELID(timeInterfItemsAGDSW5_1,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW (5): [1] cumsum");
                         Teuchos::scan<int, int>(*(this->MpiComm_), Teuchos::REDUCE_SUM, numInterfFnHandledByRoot, Teuchos::outArg(cumsum));
                         FROSCH_TIMER_STOP(timeInterfItemsAGDSW5_1);
                         const int globalOffsetOfRank = cumsum - numInterfFnHandledByRoot;
@@ -1066,7 +1082,7 @@ namespace FROSch {
                         if (addMPIBarriersForSomeTimers) this->MpiComm_->barrier();
                         FROSCH_TIMER_STOP(timeInterfItemsAGDSW5);
 
-                        FROSCH_TIMER_START_LEVELID(timeInterfItemsAGDSW6,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW interface-item functions (6): share and store eigenvectors");
+                        FROSCH_TIMER_START_LEVELID(timeInterfItemsAGDSW6,"GDSWCoarseOperator::resetCoarseSpaceBlock::AGDSW (6): share and store eigenvectors");
 
                         // Create a (serial) MultiVector for the interface on the current rank (if the number of coarse functions to be created is > 0).
                         if (numInterfFnOnRank > 0) {
@@ -1107,17 +1123,6 @@ namespace FROSch {
                                 if (commNeighborsOfInterfItem->getRank() == rootRankOfNeighborhood) {
 
                                     LOVec sel = selectedEigenvectorsOfRank__list.at(localInterfItemID);
-
-                                    // TODO: Implement some output for eigenvalues. Statistics into stdout and all eigenvalues into text file?
-                                    // std::this_thread::sleep_for(std::chrono::nanoseconds(50000));
-                                    // Teuchos::RCP< const Teuchos::Comm<int> > commNeighborsOfInterfItem = subcomms.at(localInterfItemID);
-                                    // commNeighborsOfInterfItem->barrier();
-                                    // std::cout << "Eigenvalues: " << std::endl;
-                                    // for (LO kk = 0; kk < (LO)eigenvalues_ptr->size(); kk++) {
-                                    //     std::cout << "i = " << kk << ": " << (*eigenvalues_ptr)[kk] << std::endl;
-                                    // }
-                                    // std::this_thread::sleep_for(std::chrono::nanoseconds(50000));
-                                    // commNeighborsOfInterfItem->barrier();
     
                                     // Copy eigenvectors from SerialDenseMatrix to MultiVector that is shared by all item-associated MPI ranks.
                                     // All values (of the matrix) are still stored on the current rank, since the unique map was set up this way.

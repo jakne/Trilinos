@@ -129,6 +129,7 @@
                         </ParameterList>
                         <Parameter name="Add MPI barriers for some timers"          type="bool"     value="true"/>  <!-- To clearly separate the timings for some distinct parts of the code, include MPI barriers. -->
                         <Parameter name="Print detailed extension times"            type="bool"     value="true"/>  <!-- Computing the operator-harmonic extension is expensive. Show per timings per interface component. -->
+                        <Parameter name="Print nnz of extension matrix"             type="bool"     value="true"/>  <!-- Print number of nonzeros of the harmonic extension operator. -->
                     </ParameterList>
 
                 </ParameterList> <!-- GDSWCoarseOperator -->
