@@ -76,9 +76,10 @@
                 </ParameterList>
 
                 <ParameterList name="GDSWCoarseOperator">                           <!-- Linear Solver/Preconditioner Types/FROSch/GDSWCoarseOperator -->
+                    <Parameter name="Phi: Dropping Threshold"                       type="double"   value="0.0"/>    <!-- Ignore small values in the coarse basis functions -->
                     <Parameter name="Export coarse functions to Phi.txt"            type="bool"     value="false"/>
-
                     <Parameter name="Skip DetectLinearDependencies"                 type="bool"     value="true"/>
+
                     <ParameterList name="Blocks">                                   <!-- Linear Solver/Preconditioner Types/FROSch/GDSWCoarseOperator/Blocks -->
                         <ParameterList name="1">
                             <Parameter name="Use For Coarse Space"                  type="bool"     value="true"/>
