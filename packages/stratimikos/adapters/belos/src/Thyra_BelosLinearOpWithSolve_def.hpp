@@ -10,6 +10,7 @@
 #ifndef THYRA_BELOS_LINEAR_OP_WITH_SOLVE_HPP
 #define THYRA_BELOS_LINEAR_OP_WITH_SOLVE_HPP
 
+#include "BelosPseudoBlockCGSolMgr.hpp"
 #include "Thyra_BelosLinearOpWithSolve_decl.hpp"
 #include "Thyra_GeneralSolveCriteriaBelosStatusTest.hpp"
 #include "Thyra_LinearOpWithSolveHelpers.hpp"
@@ -757,6 +758,23 @@ BelosLinearOpWithSolve<Scalar>::solveImpl(
 //  is not set to Teuchos::VERB_NONE, so I'm commenting this out for now.
 //  if (out.get() && static_cast<int>(verbLevel) > static_cast<int>(Teuchos::VERB_NONE))
 //    *out << "\nTotal solve time in Belos = "<<totalTimer.totalElapsedTime()<<" sec\n";
+
+  // PseudoBlockCG
+  using CGSolver = Belos::PseudoBlockCGSolMgr<Scalar, MV_t, LO_t>;
+  auto cgSolver = Teuchos::rcp_dynamic_cast<CGSolver>(iterativeSolver_, false);
+  if (Teuchos::nonnull(cgSolver)) {
+    const Scalar condEstimate = cgSolver->getConditionEstimate();
+  
+    if (solveStatus.extraParameters.is_null()) {
+      solveStatus.extraParameters = parameterList ();
+    }
+    solveStatus.extraParameters->set(
+      "Belos/Condition Number Estimate",
+      condEstimate);
+    solveStatus.extraParameters->set(
+      "Condition Number Estimate",
+      condEstimate);
+  }
 
   return solveStatus;
 
