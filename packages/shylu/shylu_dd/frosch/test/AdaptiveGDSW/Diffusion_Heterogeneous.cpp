@@ -443,7 +443,7 @@ int main(int argc, char *argv[])
                     //          global columns 0,1,2,...,6 --> {1,3,5} are set to coefficient_max
                     const GO gid_el = l2g_elements(element_idx); // global element index
                     const GO id_in_row = gid_el % nex;
-                    const bool isInLastColumn = (id_in_row % (nex - 1) == 0);
+                    const bool isInLastColumn = false; // (id_in_row % (nex - 1) == 0); [JK] TODO
                     if (!isInLastColumn && (id_in_row % coeff_step == 1) && (gid_el >= nrows_leave_untouched * nex)) {
                         scalar_values_of_row[col_idx] *= coefficient_max;
                     }
