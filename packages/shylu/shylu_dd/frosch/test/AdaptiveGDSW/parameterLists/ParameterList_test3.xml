@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ParameterList name="Adaptive GDSW Example">
+<ParameterList name="Adaptive GDSW">
     <!-- Pass -DHAVE_FROSch_DEBUG as compiler flag in cmake configure script to include debug functions -->
     <ParameterList name="Debug Output: main">
         <Parameter name="Row Map for FE Graph"                                      type="bool"     value="false"/>
@@ -13,8 +13,8 @@
     </ParameterList>
 
     <ParameterList name="main">
-        <Parameter name="Number of finite elements in x and y direction"            type="int"      value="8"/>
-        <Parameter name="Coefficient"                                               type="double"   value="1.0e6"/>
+        <Parameter name="Number of finite elements in x and y direction"            type="int"      value="100"/>
+        <Parameter name="Coefficient"                                               type="double"   value="10000.0"/>
         <Parameter name="Coefficient step"                                          type="int"      value="2"/>
         <Parameter name="Coefficient: rows at bottom with coefficient = 1"          type="int"      value="1"/> <!-- The example problem has a Dirichlet boundary at the bottom. Decoupling the coefficient from it makes the problem harder.-->
         <Parameter name="Export subdomain meshes to mesh_i.txt"                     type="bool"     value="false"/>
@@ -28,8 +28,16 @@
         <ParameterList name="Linear Solver Types">                                  <!-- Linear Solver/Linear Solver Types -->
             <ParameterList name="Belos">                                            <!-- Linear Solver/Linear Solver Types/Belos -->
                 <Parameter name="Left Preconditioner If Unspecified"                type="bool"     value="true"/>
-                <Parameter name="Solver Type"                                       type="string"   value="Block CG"/> <!-- {"Block GMRES","Block CG"} -->
+                <Parameter name="Solver Type"                                       type="string"   value="Pseudo Block CG"/> <!-- {"Block GMRES","Block CG","Pseudo Block CG"} -->
                 <ParameterList name="Solver Types">
+                    <ParameterList name="Pseudo Block CG">
+                        <Parameter name="Convergence Tolerance"                     type="double"   value="1e-6"/>
+                        <Parameter name="Maximum Iterations"                        type="int"      value="500"/>
+                        <Parameter name="Output Frequency"                          type="int"      value="1"/>
+                        <Parameter name="Verbosity"                                 type="int"      value="127"/>
+                        <Parameter name="Estimate Condition Number"                 type="bool"     value="true"/>
+                        <Parameter name="Output Style"                              type="int"      value="0"/>
+                    </ParameterList>
                     <ParameterList name="Block CG">
                         <Parameter name="Convergence Tolerance"                     type="double"   value="1e-6"/>
                         <Parameter name="Maximum Iterations"                        type="int"      value="500"/>
@@ -47,7 +55,7 @@
                         <Parameter name="Show Maximum Residual Norm Only"           type="bool"     value="false"/>
                         <Parameter name="Verbosity"                                 type="int"      value="50"/>
                         <Parameter name="Implicit Residual Scaling"                 type="string"   value="None"/>  <!-- "Norm of Initial Residual","Norm of RHS","Norm of Preconditioned Initial Residual","None" -->
-                        <Parameter name="Explicit Residual Scaling"                 type="string"   value="None"/>
+                        <Parameter name="Explicit Residual Scaling"                 type="string"   value="Norm of Initial Residual"/>
                         <Parameter name="Explicit Residual Test"                    type="bool"     value="true"/>
                         <Parameter name="User Status Tests Combo Type"              type="string"   value="AND"/>
                     </ParameterList>
@@ -78,7 +86,7 @@
 
                 <ParameterList name="GDSWCoarseOperator">                           <!-- Linear Solver/Preconditioner Types/FROSch/GDSWCoarseOperator -->
                     <Parameter name="Phi: Dropping Threshold"                       type="double"   value="0.0"/>    <!-- Ignore small values in the coarse basis functions -->
-                    <Parameter name="Export coarse functions to Phi.txt"            type="bool"     value="false"/>
+                    <Parameter name="Export coarse functions to Phi.txt"            type="bool"     value="true"/>
                     <Parameter name="Skip DetectLinearDependencies"                 type="bool"     value="true"/>
 
                     <ParameterList name="Blocks">                                   <!-- Linear Solver/Preconditioner Types/FROSch/GDSWCoarseOperator/Blocks -->
@@ -121,7 +129,7 @@
 
                     <Parameter name="Use Adaptive Coarse Space"                     type="bool"     value="true"/>
                     <ParameterList name="Adaptive problems">                        <!-- Linear Solver/Preconditioner Types/FROSch/GDSWCoarseOperator/Adaptive problems -->
-                        <Parameter name="Tolerance for the selection of functions"  type="double"   value="0.03"/>
+                        <Parameter name="Tolerance for the selection of functions"  type="double"   value="0.01"/>
                         <Parameter name="Include GDSW functions"                    type="bool"     value="false"/>  <!-- Use GDSW function on interface item if no eigenfunctions were selected -->
                         <Parameter name="Solver Type"                               type="string"   value="LAPACK"/>
                         <ParameterList name="Solver Types">

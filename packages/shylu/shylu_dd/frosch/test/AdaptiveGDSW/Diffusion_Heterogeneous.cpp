@@ -18,7 +18,7 @@
  * 3) sparse direct
  * mpirun -np 9 --oversubscribe ./ShyLU_DDFROSch_Diffusion_Heterogeneous.exe --num-elements-1d=60 --coeff=1000000.0 --coeff_step=2 --nrows_leave_untouched=10 --overlap=0 --plist=ParameterList.xml --directSolver=1
  *
- * Parameters + Examples:
+ * Parameters + Examples: $$$ Neue Test-Parameter fehlen noch
  * --num-elements-1d       = 60
  *         Default: sqrt(#ranks) * 8
  *         Number of finite elements in x and y direction
@@ -225,6 +225,11 @@ int main(int argc, char *argv[])
     int    overlap                    = -1;    // algebraic overlap of the domain decomposition method, 0 means only the interface nodes are shared
     int    useAdaptiveCoarseSpace_int = -1;    // use adaptive coarse space: 1 use, 0 don't use
     int    directSolver               = -1;    // use sparse direct solver: 1 use, 0 don't use (ignores adaptive coarse space)
+    int    isTest                     = 0;     // is this a test: 1 yes, 0 no
+    int    test_numIter               = -1;    // use this reference number of iterations and compare it with the one achieved below
+    double test_condEst               = -1.0;  // use this reference condition number estimate and compare it with the one achieved below
+    double test_relRes                = -1.0;  // use this reference relative residual and compare it with the one achieved below
+    int    test_significantDigits     = -1;    // 3.14e-4 has three significant digits. Compare with reference value based on these digits.
     std::string xmlFile = "ParameterList.xml"; // parameter list file
 
     // Read parameters from command line and from parameter list.
@@ -237,6 +242,11 @@ int main(int argc, char *argv[])
     clp.setOption("adaptive",              &useAdaptiveCoarseSpace_int, "Use Adaptive Coarse Space (0: no, 1: yes).");
     clp.setOption("directSolver",          &directSolver, "Use sparse direct solver (0: no, 1: yes).");
     clp.setOption("plist",                 &xmlFile, "File name of the parameter list.");
+    clp.setOption("test",                  &isTest, "Is this a test (0: no, 1:yes)?");
+    clp.setOption("test_iter",             &test_numIter, "Reference test value for number of iterations.");
+    clp.setOption("test_relResidual",      &test_relRes,  "Reference test value for achieved relative residual.");
+    clp.setOption("test_condEst",          &test_condEst, "Reference test value for condition number estimate.");
+    clp.setOption("test_significantDigits",&test_significantDigits, "Digits to compare with reference value.");
     clp.recogniseAllOptions(true);
     clp.throwExceptions(false);
     Teuchos::CommandLineProcessor::EParseCommandLineReturn parseReturn = clp.parse(argc, argv);
@@ -255,11 +265,11 @@ int main(int argc, char *argv[])
     Teuchos::RCP<Teuchos::ParameterList> parameterList_linearSolver = Teuchos::sublist(parameterList, "Linear Solver");
     Teuchos::RCP<Teuchos::ParameterList> parameterList_FROSch = sublist(sublist(parameterList_linearSolver, "Preconditioner Types"), "FROSch");
 
-    setParam(parameterList_main,   "Number of finite elements in x and y direction", numElements1D,         -1,   Nx*8);
-    setParam(parameterList_main,   "Coefficient",                                    coeff,                 -1.0, 1.0e6);
-    setParam(parameterList_main,   "Coefficient step",                               coeff_step,            -1,   2);
-    setParam(parameterList_main,   "Number of bottom rows to leave untouched",       nrows_leave_untouched, -1,   4);
-    setParam(parameterList_FROSch, "Overlap",                                        overlap,               -1,   0);
+    setParam(parameterList_main,   "Number of finite elements in x and y direction",   numElements1D,         -1,   Nx*8);
+    setParam(parameterList_main,   "Coefficient",                                      coeff,                 -1.0, 1.0e6);
+    setParam(parameterList_main,   "Coefficient step",                                 coeff_step,            -1,   2);
+    setParam(parameterList_main,   "Coefficient: rows at bottom with coefficient = 1", nrows_leave_untouched, -1,   4);
+    setParam(parameterList_FROSch, "Overlap",                                          overlap,               -1,   0);
     {
         bool useAdaptiveCoarseSpace;
         setParamBool(sublist(parameterList_FROSch, "GDSWCoarseOperator"), "Use Adaptive Coarse Space", useAdaptiveCoarseSpace, useAdaptiveCoarseSpace_int, -1, true);
@@ -603,6 +613,60 @@ int main(int argc, char *argv[])
 
     Thyra::SolveStatus<SC> status = Thyra::solve<SC>(*lows, Thyra::NOTRANS, *rhs_thyra, solution_thyra.ptr());
 
+    // Convergence infos
+    const bool converged = (status.solveStatus == Thyra::SOLVE_STATUS_CONVERGED);
+    int numIterations = -1;
+    double condEst = -1.0;
+    if (Teuchos::nonnull(status.extraParameters)) {
+        numIterations = status.extraParameters->get<int>("Iteration Count", -1);
+        condEst = status.extraParameters->get<double>("Condition Number Estimate", -1.0);
+    }
+
+    int exit_status = EXIT_SUCCESS;
+    if (isTest == 1) {
+        comm->barrier();
+        if (comm->getRank() == 0) {
+            std::cout << "Expected values" << std::endl;
+            std::cout << "   Number of iterations:      " << test_numIter << std::endl;
+            std::cout << "   Relative residual:         " << std::setprecision(test_significantDigits-1) << std::scientific << test_relRes << std::endl;
+            std::cout << "   Condition number estimate: " << std::setprecision(test_significantDigits-1) << std::scientific << test_condEst << std::endl;
+            std::cout << "   Compare # of digits:       " << test_significantDigits << std::endl;
+        }
+        comm->barrier();
+
+        if ((not(converged)) || (numIterations != test_numIter)) exit_status = EXIT_FAILURE;
+
+        // Compare condition number estimate
+        const double test_tol = std::pow(10.0,-(test_significantDigits-1)); // 3.14 --> relError < tol = 0.01
+        if (std::fabs(test_condEst - condEst)/std::fabs(test_condEst) > test_tol) exit_status = EXIT_FAILURE;
+
+        // Compare relative residual
+        if (test_relRes > 0) {
+            const double relError = std::fabs(test_relRes - status.achievedTol)/std::fabs(status.achievedTol);
+            if (relError > test_tol) exit_status = EXIT_FAILURE;
+        } else {
+            // A residual of 0 is rare and was not required for testing so far.
+            // If it is encountered, a test for zero is probably too harsh, and a test
+            // for the absolute difference might be required.
+            if (status.achievedTol != 0.0) exit_status = EXIT_FAILURE;
+        }
+    }
+
+    comm->barrier();
+    if (comm->getRank() == 0) {
+        std::cout << "Converged: " << std::boolalpha << converged << std::endl;
+        if (numIterations != -1) std::cout << "Iterations: " << numIterations << std::endl;
+        if (status.achievedTol != -1.0) {
+            std::cout << "Achieved relative residual: " << std::scientific << status.achievedTol << std::endl;
+        }
+        if (condEst >= 1.0) {
+            std::cout << "Condition number estimate: " << std::scientific << condEst << std::endl;
+        }
+        if (status.message != "") std::cout << "Solver message: " << status.message << std::endl;
+        std::cout << std::endl;
+    }
+    comm->barrier();
+
     comm->barrier();
     {
         stackedTimer->stopBaseTimer();
@@ -626,5 +690,5 @@ int main(int argc, char *argv[])
         cout << "\n#############\n# Finished! #\n#############" << endl;
     comm->barrier();
 
-    return EXIT_SUCCESS;
+    return exit_status;
 }
