@@ -21,10 +21,10 @@
              The interface components may be sorted differently in the independent reference implementation, 
              so they will be compared until a match is found.
         -->
-        <Parameter name="eigenvalues(3)"                                            type="Array(double)" value="{5.524234750754320e-04}"/>
+        <Parameter name="eigenvalues(0)"                                            type="Array(double)" value="{5.524234750754320e-04}"/>
         <Parameter name="eigenvalues(1)"                                            type="Array(double)" value="{3.498633493860068e-04}"/>
         <Parameter name="eigenvalues(2)"                                            type="Array(double)" value="{9.030145264474210e-05,9.697982920357801e-01}"/>
-        <Parameter name="eigenvalues(0)"                                            type="Array(double)" value="{1.199730765661655e-04,9.441481776456239e-01}"/>
+        <Parameter name="eigenvalues(3)"                                            type="Array(double)" value="{1.199730765661655e-04,9.441481776456239e-01}"/>
     </ParameterList>
 
     <!-- Pass -DHAVE_FROSch_DEBUG as compiler flag in cmake configure script to include debug functions -->

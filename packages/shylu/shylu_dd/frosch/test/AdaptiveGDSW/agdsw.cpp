@@ -629,6 +629,9 @@ int main(int argc, char *argv[])
         std::cout << std::endl;
     }
 
+    // TODO: [JK] Move this somewhere to the top.
+    const int wait_ns = 30000;  // wait timer so console output does not overlap from different ranks
+
     // Eigenvalue information
     Teuchos::RCP<std::vector<GO>> globalInterfaceIDs_vec;
     Teuchos::RCP<std::vector< Teuchos::RCP<std::vector<SC>> >> eigenvalues_vec_vec;
@@ -640,8 +643,6 @@ int main(int argc, char *argv[])
 
              using vec_vec_ptr = Teuchos::RCP<std::vector< Teuchos::RCP<std::vector<SC>> >>;
              eigenvalues_vec_vec = Teuchos::sublist(parameterList_FROSch, "GDSWCoarseOperator")->get<vec_vec_ptr>("eigenvalues",Teuchos::null);
-
-             const int wait_ns = 30000;  // wait timer so console output does not overlap from different ranks
 
              std::this_thread::sleep_for(std::chrono::nanoseconds(wait_ns));
              comm->barrier();
@@ -725,6 +726,7 @@ int main(int argc, char *argv[])
         }
 
         // Print reference values
+        std::this_thread::sleep_for(std::chrono::nanoseconds(wait_ns));
         comm->barrier();
         if (comm->getRank() == 0) {
             std::cout << "Expected values" << std::endl;
@@ -752,6 +754,7 @@ int main(int argc, char *argv[])
             }
         }
         comm->barrier();
+        std::this_thread::sleep_for(std::chrono::nanoseconds(wait_ns));
 
         if (not(converged)) exit_status = EXIT_FAILURE;
 
@@ -780,6 +783,14 @@ int main(int argc, char *argv[])
 
         // Compare eigenvalues
         if (test_eigenvalues_vec_array->size() > 0) {
+            comm->barrier();
+            std::this_thread::sleep_for(std::chrono::nanoseconds(wait_ns));
+            if (comm->getRank() == 0) {
+                std::cout << "   Find mapping for interface component (e.g. edge/faces) IDs from <this> to reference by matching eigenvalues." << std::endl;
+            }
+            comm->barrier();
+            std::this_thread::sleep_for(std::chrono::nanoseconds(wait_ns));
+            
             for (std::size_t kk = 0; kk < (std::size_t)eigenvalues_vec_vec->size(); kk++) {
                 Teuchos::RCP< std::vector<SC> > eigenvalues_ptr = (*eigenvalues_vec_vec)[kk];
 
@@ -804,22 +815,31 @@ int main(int argc, char *argv[])
                     }
 
                     if (foundMatch) {
-                        std::cout << "Match (this|reference) " << (*globalInterfaceIDs_vec)[kk] << "|" << gID_ref << std::endl;
+                        std::cout << "      Match (this --> reference) " << (*globalInterfaceIDs_vec)[kk] << " --> " << gID_ref << std::endl;
                         break;
                     }
                 }
 
                 if (not(foundMatch)) {
-                    std::cout << "Could not find a match for <this> interface component with global ID " << (*globalInterfaceIDs_vec)[kk] << ", which is associated with rank " << comm->getRank() << "." << std::endl;
+                    std::cout << "      Could not find a match for <this> interface component with global ID " << (*globalInterfaceIDs_vec)[kk] << ", which is associated with rank " << comm->getRank() << "." << std::endl;
                     exit_status = EXIT_FAILURE;
                 }
         	}
         }
 
+        comm->barrier();
+        std::this_thread::sleep_for(std::chrono::nanoseconds(wait_ns));
         if (comm->getRank() == 0) {
-           std::cout << std::endl;
+            std::cout << std::endl;
+            if (exit_status == EXIT_SUCCESS) {
+                std::cout << "SUCCESS: Same results as provided reference values." << std::endl;
+            } else {
+                std::cout << "FAILURE: Different results than reference values." << std::endl;
+            }
+            std::cout << std::endl;
         }
         comm->barrier();
+        std::this_thread::sleep_for(std::chrono::nanoseconds(wait_ns));
     }
 
     comm->barrier();

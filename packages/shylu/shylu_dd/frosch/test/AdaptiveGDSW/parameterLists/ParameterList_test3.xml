@@ -1,5 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ParameterList name="Adaptive GDSW">
+    <ParameterList name="Test">  <!-- Reference values obtained from an independent implementation. -->
+        <!--
+            2D diffusion problem
+            minimum coeficient 1, maximum coefficient 10000
+            10 x 10 subdomains, 10 x 10 Q1 finite elements per subdomain
+            overlap: 0 (overlapping subdomains are given by all nodes in a subdomain, which includes the interface)
+            tol: 0.01 (tolerance for the selection of eigenvectors)
+        -->
+        <Parameter name="Compare results with reference values"                     type="bool"     value="true"/>
+        <Parameter name="Iterations"                                                type="int"      value="32"/>
+        <Parameter name="Relative residual"                                         type="double"   value="5.333e-07"/>
+        <Parameter name="PCG condition number estimate"                             type="double"   value="23.77"/>
+        <Parameter name="Number of significant digits to test"                      type="int"      value="4"/>  <!-- Example: 5.603e-08 has the 4 significant digits 5,6,0,3. -->
+        <Parameter name="Coarse space size"                                         type="int"      value="621"/>
+        <Parameter name="Vertex coarse functions"                                   type="int"      value="81"/>
+        <Parameter name="Edge coarse functions"                                     type="int"      value="540"/>
+    </ParameterList>
+
     <!-- Pass -DHAVE_FROSch_DEBUG as compiler flag in cmake configure script to include debug functions -->
     <ParameterList name="Debug Output: main">
         <Parameter name="Row Map for FE Graph"                                      type="bool"     value="false"/>
