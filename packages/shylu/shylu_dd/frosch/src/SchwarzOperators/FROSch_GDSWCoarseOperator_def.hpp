@@ -954,6 +954,18 @@ namespace FROSch {
                         // after they have been shared with the respective neighboring subdomains (and also after they have been extended by zero to the remaining local interface).
                         Teuchos::Array< LOVec > selectedEigenvectorsOfRank__list(0);
 
+                        // The user can specify if the computed eigenvalues are stored in the parameter list.
+                        bool storeEigenvaluesInParameterList = false;
+                        Teuchos::RCP<std::vector< Teuchos::RCP<std::vector<SC>> >> eigenvalues_vec_vec;
+                        Teuchos::RCP<std::vector<GO>> globalInterfaceIDs_vec;
+                        if (this->ParameterList_->isParameter("Return eigenvalues")) {
+                            storeEigenvaluesInParameterList = this->ParameterList_->get("Return eigenvalues",false);
+                            eigenvalues_vec_vec = Teuchos::rcp(new std::vector< Teuchos::RCP<std::vector<SC>> >());
+                            globalInterfaceIDs_vec    = Teuchos::rcp(new std::vector<GO>());
+                            this->ParameterList_->set("eigenvalues", eigenvalues_vec_vec);
+                            this->ParameterList_->set("eigenvalues_globalInterfaceIDs", globalInterfaceIDs_vec);
+                        }
+
                         for (int localInterfItemID = 0; localInterfItemID < numInterfItemsLocal; localInterfItemID++) {
                             Teuchos::RCP< const Teuchos::Comm<int> > commNeighborsOfInterfItem = subcomms.at(localInterfItemID);
 
@@ -992,6 +1004,13 @@ namespace FROSch {
                                     eigenvectors_ptr);
                                 FROSCH_TIMER_STOP(timeInterfItemsAGDSW4_loop);
 
+                                // Store eigenvalues in parameter list if the user requested this.
+                                if (storeEigenvaluesInParameterList) {
+                                    const GO globalInterfItemID = globalInterfItemIDsOfSubdomain.at(localInterfItemID);
+                                    eigenvalues_vec_vec->push_back(eigenvalues_ptr);
+                                    globalInterfaceIDs_vec->push_back(globalInterfItemID);
+                                }
+
                                 // Determine which eigenvectors should be selected, based on the user-prescribed tolerance.
                                 const double tol = parameterList_adaptiveProblems->get("Tolerance for the selection of functions", 0.01);
                                 for (LO kk = 0; kk < (LO)eigenvalues_ptr->size(); kk++) {
@@ -1001,16 +1020,13 @@ namespace FROSch {
                                     }
                                 }
 
-                                // TODO: Implement some output for eigenvalues. Statistics into stdout and all eigenvalues into text file?
+                                // // TODO: Implement some output for eigenvalues. Statistics into stdout and all eigenvalues into text file?
                                 // std::this_thread::sleep_for(std::chrono::nanoseconds(50000));
-                                // Teuchos::RCP< const Teuchos::Comm<int> > commNeighborsOfInterfItem = subcomms.at(localInterfItemID);
-                                // commNeighborsOfInterfItem->barrier();
                                 // std::cout << "Eigenvalues: " << std::endl;
                                 // for (LO kk = 0; kk < (LO)eigenvalues_ptr->size(); kk++) {
                                 //     std::cout << "i = " << kk << ": " << (*eigenvalues_ptr)[kk] << std::endl;
                                 // }
                                 // std::this_thread::sleep_for(std::chrono::nanoseconds(50000));
-                                // commNeighborsOfInterfItem->barrier();
 
                                 numInterfFnHandledByRoot += numEigVecToSelect;
                                 if ((numEigVecToSelect == 0) && (parameterList_adaptiveProblems->get("Include GDSW functions", false))) {

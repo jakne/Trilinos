@@ -12,13 +12,13 @@
  *
  * Quickstart:
  * 1) nonadaptive
- * mpirun -np 9 --oversubscribe ./ShyLU_DDFROSch_Diffusion_Heterogeneous.exe --num-elements-1d=60 --coeff=1000000.0 --coeff_step=2 --nrows_leave_untouched=10 --overlap=0 --plist=ParameterList.xml --adaptive=0
+ * mpirun -np 9 --oversubscribe ./ShyLU_DDFROSch_AdaptiveGDSW.exe --num-elements-1d=60 --coeff=1000000.0 --coeff_step=2 --nrows_leave_untouched=10 --overlap=0 --plist=ParameterList.xml --adaptive=0
  * 2) adaptive
- * mpirun -np 9 --oversubscribe ./ShyLU_DDFROSch_Diffusion_Heterogeneous.exe --num-elements-1d=60 --coeff=1000000.0 --coeff_step=2 --nrows_leave_untouched=10 --overlap=0 --plist=ParameterList.xml --adaptive=1
+ * mpirun -np 9 --oversubscribe ./ShyLU_DDFROSch_AdaptiveGDSW.exe --num-elements-1d=60 --coeff=1000000.0 --coeff_step=2 --nrows_leave_untouched=10 --overlap=0 --plist=ParameterList.xml --adaptive=1
  * 3) sparse direct
- * mpirun -np 9 --oversubscribe ./ShyLU_DDFROSch_Diffusion_Heterogeneous.exe --num-elements-1d=60 --coeff=1000000.0 --coeff_step=2 --nrows_leave_untouched=10 --overlap=0 --plist=ParameterList.xml --directSolver=1
+ * mpirun -np 9 --oversubscribe ./ShyLU_DDFROSch_AdaptiveGDSW.exe --num-elements-1d=60 --coeff=1000000.0 --coeff_step=2 --nrows_leave_untouched=10 --overlap=0 --plist=ParameterList.xml --directSolver=1
  *
- * Parameters + Examples: $$$ Neue Test-Parameter fehlen noch
+ * Parameters + Examples:
  * --num-elements-1d       = 60
  *         Default: sqrt(#ranks) * 8
  *         Number of finite elements in x and y direction
@@ -225,11 +225,6 @@ int main(int argc, char *argv[])
     int    overlap                    = -1;    // algebraic overlap of the domain decomposition method, 0 means only the interface nodes are shared
     int    useAdaptiveCoarseSpace_int = -1;    // use adaptive coarse space: 1 use, 0 don't use
     int    directSolver               = -1;    // use sparse direct solver: 1 use, 0 don't use (ignores adaptive coarse space)
-    int    isTest                     = 0;     // is this a test: 1 yes, 0 no
-    int    test_numIter               = -1;    // use this reference number of iterations and compare it with the one achieved below
-    double test_condEst               = -1.0;  // use this reference condition number estimate and compare it with the one achieved below
-    double test_relRes                = -1.0;  // use this reference relative residual and compare it with the one achieved below
-    int    test_significantDigits     = -1;    // 3.14e-4 has three significant digits. Compare with reference value based on these digits.
     std::string xmlFile = "ParameterList.xml"; // parameter list file
 
     // Read parameters from command line and from parameter list.
@@ -242,11 +237,6 @@ int main(int argc, char *argv[])
     clp.setOption("adaptive",              &useAdaptiveCoarseSpace_int, "Use Adaptive Coarse Space (0: no, 1: yes).");
     clp.setOption("directSolver",          &directSolver, "Use sparse direct solver (0: no, 1: yes).");
     clp.setOption("plist",                 &xmlFile, "File name of the parameter list.");
-    clp.setOption("test",                  &isTest, "Is this a test (0: no, 1:yes)?");
-    clp.setOption("test_iter",             &test_numIter, "Reference test value for number of iterations.");
-    clp.setOption("test_relResidual",      &test_relRes,  "Reference test value for achieved relative residual.");
-    clp.setOption("test_condEst",          &test_condEst, "Reference test value for condition number estimate.");
-    clp.setOption("test_significantDigits",&test_significantDigits, "Digits to compare with reference value.");
     clp.recogniseAllOptions(true);
     clp.throwExceptions(false);
     Teuchos::CommandLineProcessor::EParseCommandLineReturn parseReturn = clp.parse(argc, argv);
@@ -261,6 +251,7 @@ int main(int argc, char *argv[])
     }
 
     Teuchos::RCP<Teuchos::ParameterList> parameterList = Teuchos::getParametersFromXmlFile(xmlFile);
+    Teuchos::RCP<Teuchos::ParameterList> parameterList_Test = Teuchos::sublist(parameterList, "Test");
     Teuchos::RCP<Teuchos::ParameterList> parameterList_main = Teuchos::sublist(parameterList, "main");
     Teuchos::RCP<Teuchos::ParameterList> parameterList_linearSolver = Teuchos::sublist(parameterList, "Linear Solver");
     Teuchos::RCP<Teuchos::ParameterList> parameterList_FROSch = sublist(sublist(parameterList_linearSolver, "Preconditioner Types"), "FROSch");
@@ -273,6 +264,8 @@ int main(int argc, char *argv[])
     {
         bool useAdaptiveCoarseSpace;
         setParamBool(sublist(parameterList_FROSch, "GDSWCoarseOperator"), "Use Adaptive Coarse Space", useAdaptiveCoarseSpace, useAdaptiveCoarseSpace_int, -1, true);
+
+        sublist(parameterList_FROSch, "GDSWCoarseOperator")->set("Return eigenvalues", true);
     }
     if (directSolver == 1) parameterList_linearSolver->set("Linear Solver Type", "Amesos2");
     else parameterList_linearSolver->set("Linear Solver Type", "Belos");
@@ -574,7 +567,7 @@ int main(int argc, char *argv[])
     comm->barrier();
 
     comm->barrier();
-    Teuchos::RCP<Teuchos::StackedTimer> stackedTimer = Teuchos::rcp(new Teuchos::StackedTimer("AdaptiveGDSW Diffusion_Heterogeneous Test"));
+    Teuchos::RCP<Teuchos::StackedTimer> stackedTimer = Teuchos::rcp(new Teuchos::StackedTimer("AdaptiveGDSW Test"));
     {
         Teuchos::TimeMonitor::setStackedTimer(stackedTimer);
     }
@@ -622,36 +615,6 @@ int main(int argc, char *argv[])
         condEst = status.extraParameters->get<double>("Condition Number Estimate", -1.0);
     }
 
-    int exit_status = EXIT_SUCCESS;
-    if (isTest == 1) {
-        comm->barrier();
-        if (comm->getRank() == 0) {
-            std::cout << "Expected values" << std::endl;
-            std::cout << "   Number of iterations:      " << test_numIter << std::endl;
-            std::cout << "   Relative residual:         " << std::setprecision(test_significantDigits-1) << std::scientific << test_relRes << std::endl;
-            std::cout << "   Condition number estimate: " << std::setprecision(test_significantDigits-1) << std::scientific << test_condEst << std::endl;
-            std::cout << "   Compare # of digits:       " << test_significantDigits << std::endl;
-        }
-        comm->barrier();
-
-        if ((not(converged)) || (numIterations != test_numIter)) exit_status = EXIT_FAILURE;
-
-        // Compare condition number estimate
-        const double test_tol = std::pow(10.0,-(test_significantDigits-1)); // 3.14 --> relError < tol = 0.01
-        if (std::fabs(test_condEst - condEst)/std::fabs(test_condEst) > test_tol) exit_status = EXIT_FAILURE;
-
-        // Compare relative residual
-        if (test_relRes > 0) {
-            const double relError = std::fabs(test_relRes - status.achievedTol)/std::fabs(status.achievedTol);
-            if (relError > test_tol) exit_status = EXIT_FAILURE;
-        } else {
-            // A residual of 0 is rare and was not required for testing so far.
-            // If it is encountered, a test for zero is probably too harsh, and a test
-            // for the absolute difference might be required.
-            if (status.achievedTol != 0.0) exit_status = EXIT_FAILURE;
-        }
-    }
-
     comm->barrier();
     if (comm->getRank() == 0) {
         std::cout << "Converged: " << std::boolalpha << converged << std::endl;
@@ -665,7 +628,199 @@ int main(int argc, char *argv[])
         if (status.message != "") std::cout << "Solver message: " << status.message << std::endl;
         std::cout << std::endl;
     }
+
+    // Eigenvalue information
+    Teuchos::RCP<std::vector<GO>> globalInterfaceIDs_vec;
+    Teuchos::RCP<std::vector< Teuchos::RCP<std::vector<SC>> >> eigenvalues_vec_vec;
+    if (Teuchos::sublist(parameterList_FROSch, "GDSWCoarseOperator")->get("Return eigenvalues", false)) {
+        if ((Teuchos::sublist(parameterList_FROSch, "GDSWCoarseOperator")->isParameter("eigenvalues")) && 
+                 (Teuchos::sublist(parameterList_FROSch, "GDSWCoarseOperator")->isParameter("eigenvalues_globalInterfaceIDs"))) {
+             using vec_ptr = Teuchos::RCP<std::vector<GO>>;
+             globalInterfaceIDs_vec = Teuchos::sublist(parameterList_FROSch, "GDSWCoarseOperator")->get<vec_ptr>("eigenvalues_globalInterfaceIDs",Teuchos::null);
+
+             using vec_vec_ptr = Teuchos::RCP<std::vector< Teuchos::RCP<std::vector<SC>> >>;
+             eigenvalues_vec_vec = Teuchos::sublist(parameterList_FROSch, "GDSWCoarseOperator")->get<vec_vec_ptr>("eigenvalues",Teuchos::null);
+
+             const int wait_ns = 30000;  // wait timer so console output does not overlap from different ranks
+
+             std::this_thread::sleep_for(std::chrono::nanoseconds(wait_ns));
+             comm->barrier();
+             if (comm->getRank() == 0) {
+                 std::cout << "Rank distribution of interface components:" << std::endl;
+             }
+             for (int rank = 0; rank < comm->getSize(); rank++) {
+                 if (rank == comm->getRank()) {
+                     // rank(i): interface item global ID 1   interface item global ID 2   ...
+                     std::cout << "rank (" << rank << "): ";
+                     for (std::size_t kk = 0; kk < (LO)globalInterfaceIDs_vec->size(); kk++) {
+                         std::cout <<  (*globalInterfaceIDs_vec)[kk] << "  ";
+                     }
+                     std::cout << std::endl;
+                     std::cout << std::flush;
+                     std::this_thread::sleep_for(std::chrono::nanoseconds(wait_ns));
+                 }
+                 comm->barrier();
+             }
+
+             std::this_thread::sleep_for(std::chrono::nanoseconds(wait_ns));
+             comm->barrier();
+             if (comm->getRank() == 0) {
+                 std::cout << "Eigenvalues (rank|interface item globalID):" << std::endl;
+             }
+             for (int rank = 0; rank < comm->getSize(); rank++) {
+                 if (rank == comm->getRank()) {
+                     for (std::size_t kk = 0; kk < (LO)globalInterfaceIDs_vec->size(); kk++) {
+                         // rank|interface item global ID
+                         std::cout << "(" << rank << "|" << (*globalInterfaceIDs_vec)[kk] << "): ";
+                         Teuchos::RCP< std::vector<SC> > eigenvalues_ptr = (*eigenvalues_vec_vec)[kk];
+                         for (std::size_t ll = 0; ll < (std::size_t)eigenvalues_ptr->size(); ll++) {
+                             std::cout << std::setprecision(2) << std::scientific << (*eigenvalues_ptr)[ll] << "  ";
+                         }
+                         std::cout << std::endl;
+                     }
+                     std::cout << std::flush;
+                     std::this_thread::sleep_for(std::chrono::nanoseconds(wait_ns));
+                 }
+                 comm->barrier();
+             }
+             if (comm->getRank() == 0) {
+                std::cout << std::endl;
+             }
+             comm->barrier();
+        } else {
+             if (comm->getRank() == 0) {
+                 std::cout << "Eigenvalue were requested but not stored." << std::endl;
+             }
+        }
+    }
     comm->barrier();
+
+    // Compare results with expected/reference values.
+    int exit_status = EXIT_SUCCESS;
+    const bool isTest = parameterList_Test->get("Compare results with reference values", false);
+    if (isTest == 1) {
+        // Read scalar reference values from parameter file
+        const bool   isTest                 = parameterList_Test->get("Compare results with reference values", false);
+        const int    test_numIter           = parameterList_Test->get("Iterations", -1);
+        const double test_condEst           = parameterList_Test->get("PCG condition number estimate", -1.0);
+        const double test_relRes            = parameterList_Test->get("Relative residual", -1.0);
+        const int    test_significantDigits = parameterList_Test->get("Number of significant digits to test", 3);  // 3.14e-4 has three significant digits.
+        const int    test_coarseSpaceDim    = parameterList_Test->get("Coarse space size", -1);
+        const int    test_vertexFunctions   = parameterList_Test->get("Vertex coarse functions", -1);
+        const int    test_edgeFunctions     = parameterList_Test->get("Edge coarse functions", -1);
+
+        // Read reference eigenvalues from parameter file
+        using vec_array_ptr = Teuchos::RCP<std::vector< Teuchos::RCP<Teuchos::Array<double>> >>;
+        vec_array_ptr test_eigenvalues_vec_array = Teuchos::rcp(new std::vector< Teuchos::RCP<Teuchos::Array<double>> >());
+        bool expectingMoreVectors = true;
+        int i = 0;
+        while (expectingMoreVectors) {
+            const std::string paramName = "eigenvalues(" + std::to_string(i) + ")";
+            if (parameterList_Test->isParameter(paramName)) {
+                test_eigenvalues_vec_array->push_back(Teuchos::rcp(new Teuchos::Array<double>(parameterList_Test->get<Teuchos::Array<double>>(paramName))));
+                i++;
+            } else {
+                expectingMoreVectors = false;
+            }
+        }
+
+        // Print reference values
+        comm->barrier();
+        if (comm->getRank() == 0) {
+            std::cout << "Expected values" << std::endl;
+            if (test_numIter != -1) std::cout << "   Number of iterations:      " << test_numIter << std::endl;
+            if (test_relRes != -1.0) std::cout << "   Relative residual:         " << std::setprecision(test_significantDigits-1) << std::scientific << test_relRes << std::endl;
+            if (test_condEst != -1.0) std::cout << "   Condition number estimate: " << std::setprecision(test_significantDigits-1) << std::scientific << test_condEst << std::endl;
+            std::cout << "   Compare # of digits:       " << test_significantDigits << std::endl;
+            if (test_coarseSpaceDim != -1) std::cout << "   Coarse space dimension:    " << test_coarseSpaceDim << std::endl;
+            if (test_vertexFunctions != -1) std::cout << "      Vertex functions:       " << test_vertexFunctions << std::endl;
+            if (test_edgeFunctions != -1) std::cout << "      Edge functions:         " << test_edgeFunctions << std::endl;
+
+            if (test_eigenvalues_vec_array->size() > 0) {
+                std::cout << "   Eigenvalues (interface item globalID):" << std::endl;
+
+	            for (std::size_t kk = 0; kk < (std::size_t)test_eigenvalues_vec_array->size(); kk++) {
+	                // interface item global ID
+	                std::cout << "      (" << kk << "): ";
+	                Teuchos::RCP< Teuchos::Array<double> > eigenvalues_ptr = (*test_eigenvalues_vec_array)[kk];
+	                for (std::size_t ll = 0; ll < (std::size_t)eigenvalues_ptr->size(); ll++) {
+	                    std::cout << std::setprecision(2) << std::scientific << (*eigenvalues_ptr)[ll] << "  ";
+	                }
+	                std::cout << std::endl;
+	            }
+	            std::cout << std::flush;
+            }
+        }
+        comm->barrier();
+
+        if (not(converged)) exit_status = EXIT_FAILURE;
+
+        if ((test_numIter != -1) && (numIterations != test_numIter)) exit_status = EXIT_FAILURE;
+
+        const double test_tol = std::pow(10.0,-(test_significantDigits-1)); // 3.14 --> relError < tol = 0.01
+
+        // Compare condition number estimate
+        if (test_condEst != -1.0) {
+            const double relError = std::fabs(test_condEst - condEst)/std::fabs(test_condEst);
+            if (relError > test_tol) exit_status = EXIT_FAILURE;
+        }
+
+        // Compare relative residual
+        if (test_relRes != -1.0) {
+	        if (test_relRes > 0) {
+	            const double relError = std::fabs(test_relRes - status.achievedTol)/std::fabs(status.achievedTol);
+	            if (relError > test_tol) exit_status = EXIT_FAILURE;
+	        } else {
+	            // A residual of 0 is rare and was not required for testing so far.
+	            // If it is encountered, a test for zero is probably too harsh, and a test
+	            // for the absolute difference might be required.
+	            if (status.achievedTol != 0.0) exit_status = EXIT_FAILURE;
+	        }
+        }
+
+        // Compare eigenvalues
+        if (test_eigenvalues_vec_array->size() > 0) {
+            for (std::size_t kk = 0; kk < (std::size_t)eigenvalues_vec_vec->size(); kk++) {
+                Teuchos::RCP< std::vector<SC> > eigenvalues_ptr = (*eigenvalues_vec_vec)[kk];
+
+                // We will assume that the interface components are sorted differently and try to find the right match.
+                bool foundMatch = false;
+
+                // gID: global ID of interface component of reference test.
+            	for (std::size_t gID_ref = 0; gID_ref < (std::size_t)test_eigenvalues_vec_array->size(); gID_ref++) {
+                    Teuchos::RCP< Teuchos::Array<double> > test_eigenvalues_ptr = (*test_eigenvalues_vec_array)[gID_ref];
+
+                    if (eigenvalues_ptr->size() == test_eigenvalues_ptr->size()) {
+                        bool allValuesMatch = true;
+            	        for (std::size_t ll = 0; ll < (std::size_t)eigenvalues_ptr->size(); ll++) {
+                            const double relError = std::fabs((*eigenvalues_ptr)[ll] - (*test_eigenvalues_ptr)[ll])/std::fabs((*test_eigenvalues_ptr)[ll]);
+                            if (relError > test_tol) {
+                                allValuesMatch = false;
+                                break;
+                            }
+            	        }
+
+                        if (allValuesMatch) foundMatch = true;
+                    }
+
+                    if (foundMatch) {
+                        std::cout << "Match (this|reference) " << (*globalInterfaceIDs_vec)[kk] << "|" << gID_ref << std::endl;
+                        break;
+                    }
+                }
+
+                if (not(foundMatch)) {
+                    std::cout << "Could not find a match for <this> interface component with global ID " << (*globalInterfaceIDs_vec)[kk] << ", which is associated with rank " << comm->getRank() << "." << std::endl;
+                    exit_status = EXIT_FAILURE;
+                }
+        	}
+        }
+
+        if (comm->getRank() == 0) {
+           std::cout << std::endl;
+        }
+        comm->barrier();
+    }
 
     comm->barrier();
     {
