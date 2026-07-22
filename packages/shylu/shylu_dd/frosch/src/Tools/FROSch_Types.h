@@ -39,6 +39,18 @@ namespace FROSch {
 
     enum Verbosity {None=0,All=1};
 
+    // Types interface components that coarse space basis functions are based on:
+    // Vertex functions, edge functions etc.
+    enum class InterfaceComponentType {
+        Undefined = 0,  // Supposed to always be the default
+        Vertex,
+        ShortEdge,
+        StraightEdge,
+        Edge,
+        Face,
+        Interior
+    };
+
 }
 
 #endif

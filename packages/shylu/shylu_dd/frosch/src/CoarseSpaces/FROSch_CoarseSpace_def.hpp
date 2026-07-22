@@ -33,7 +33,8 @@ namespace FROSch {
     int CoarseSpace<SC,LO,GO,NO>::addSubspace(ConstXMapPtr subspaceBasisMap,
                                               ConstXMapPtr subspaceBasisMapUnique,
                                               ConstXMultiVectorPtr subspaceBasis,
-                                              UN offset)
+                                              UN offset,
+                                              InterfaceComponentType type)
     {
         FROSCH_ASSERT(!subspaceBasisMap.is_null(),"FROSch::CoarseSpace: subspaceBasisMap.is_null()");
         if (!subspaceBasis.is_null()) {
@@ -47,6 +48,7 @@ namespace FROSch {
         UnassembledSubspaceBases_.push_back(subspaceBasis);
         Offsets_.push_back(offset);
         LocalSubspacesSizes_.push_back(subspaceBasisMap->getLocalNumElements());
+        InterfaceComponentTypes_.push_back(type);
 
         return 0;
     }
@@ -399,6 +401,37 @@ namespace FROSch {
         FROSCH_ASSERT(!GlobalBasisMatrix_.is_null(),"FROSch::CoarseSpace: GlobalBasisMatrix_.is_null().");
         return GlobalBasisMatrix_;
     }
+
+    template <class SC,class LO,class GO,class NO>
+    int CoarseSpace<SC,LO,GO,NO>::getGlobalCoarseSpaceSize() const
+    {
+        int dimCoarseSpace;
+        for (std::size_t i = 0; i < this->UnassembledBasesMaps_.size(); i++) {
+            // First, create a unique map. We could also use (maximum index  -  minimum index  + 1), 
+            // but this works only for contiguous maps. To be on the save side, we compute a unique map.
+            // Then, the global number of elements equals the number of global coarse functions.
+            auto uniqueMap = Tpetra::createOneToOne(Xpetra::toTpetra(this->UnassembledBasesMaps_[i]));
+            const auto uniqueGlobalSize = uniqueMap->getGlobalNumElements();
+            dimCoarseSpace += uniqueGlobalSize;
+        }
+        return dimCoarseSpace;
+    }
+
+    template <class SC,class LO,class GO,class NO>
+    std::map<InterfaceComponentType,GO> CoarseSpace<SC,LO,GO,NO>::getGlobalCoarseSpaceSizePerInterfaceComponent() const
+    {
+        std::map<InterfaceComponentType,GO> dimCoarseSpacePerComponent;
+        for (std::size_t i = 0; i < this->UnassembledBasesMaps_.size(); i++) {
+            // First, create a unique map. We could also use (maximum index  -  minimum index  + 1), 
+            // but this works only for contiguous maps. To be on the save side, we compute a unique map.
+            // Then, the global number of elements equals the number of global coarse functions.
+            auto uniqueMap = Tpetra::createOneToOne(Xpetra::toTpetra(this->UnassembledBasesMaps_[i]));
+            const auto uniqueGlobalSize = uniqueMap->getGlobalNumElements();
+            dimCoarseSpacePerComponent[this->InterfaceComponentTypes_[i]] += uniqueGlobalSize;
+        }
+        return dimCoarseSpacePerComponent;
+    }
+
 }
 
 #endif

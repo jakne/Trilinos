@@ -1872,6 +1872,19 @@ namespace FROSch {
         std::filesystem::path oldPath_;
     };
 
+    const char* interfaceComponentTypeToString(InterfaceComponentType type)
+    {
+        switch (type) {
+            case InterfaceComponentType::Vertex:       return "Vertex";
+            case InterfaceComponentType::ShortEdge:    return "ShortEdge";
+            case InterfaceComponentType::StraightEdge: return "StraightEdge";
+            case InterfaceComponentType::Edge:         return "Edge";
+            case InterfaceComponentType::Face:         return "Face";
+            case InterfaceComponentType::Interior:     return "Interior";
+            default:                                   return "Undefined";
+        }
+    }
+
 #ifdef HAVE_FROSch_DEBUG
 namespace debug {  // FROSch::debug
     template <typename map_type>

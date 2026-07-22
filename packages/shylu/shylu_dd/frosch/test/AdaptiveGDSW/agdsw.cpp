@@ -140,8 +140,9 @@
 // #include <Xpetra_Parameters.hpp>
 
 // FROSch
-// #include <FROSch_Types.h>  // requires Xpetra namespace
-#include <FROSch_Tools_def.hpp>
+#include <FROSch_Types.h>  // requires Xpetra namespace
+#include <FROSch_Output.h>
+#include <FROSch_Tools_decl.hpp>
 
 #include "fem_assembly_MeshDatabase.hpp"
 
@@ -266,6 +267,7 @@ int main(int argc, char *argv[])
         setParamBool(sublist(parameterList_FROSch, "GDSWCoarseOperator"), "Use Adaptive Coarse Space", useAdaptiveCoarseSpace, useAdaptiveCoarseSpace_int, -1, true);
 
         sublist(parameterList_FROSch, "GDSWCoarseOperator")->set("Return eigenvalues", true);
+        sublist(parameterList_FROSch, "GDSWCoarseOperator")->set("Return coarse space dimensions", true);
     }
     if (directSolver == 1) parameterList_linearSolver->set("Linear Solver Type", "Amesos2");
     else parameterList_linearSolver->set("Linear Solver Type", "Belos");
@@ -694,6 +696,23 @@ int main(int argc, char *argv[])
              }
         }
     }
+
+    std::map<FROSch::InterfaceComponentType,GO> dimensions;
+    GO coarseSpaceDimension;
+    if (comm->getRank() == 0) {
+    	if (Teuchos::sublist(parameterList_FROSch, "GDSWCoarseOperator")->get("Return coarse space dimensions", false)) {
+    	    dimensions = Teuchos::sublist(parameterList_FROSch, "GDSWCoarseOperator")->get<std::map<FROSch::InterfaceComponentType,GO>>("coarseSpaceDimensions");
+    	    coarseSpaceDimension = Teuchos::sublist(parameterList_FROSch, "GDSWCoarseOperator")->get<GO>("coarseSpaceDimension",-1);
+    	
+    	    std::cout << std::setw(FROSCH_OUTPUT_INDENT) << " " << "Coarse space dimensions: (Note that in 2D vertices show up as edges, and edges show up as faces.)" << std::endl;
+            std::cout << std::setw(FROSCH_OUTPUT_INDENT) << " " << "------------------------------" << std::endl;
+    	    for (const auto& entry : dimensions) {
+    	        std::cout << std::setw(FROSCH_OUTPUT_INDENT) << " " << std::setw(15) << std::left << FROSch::interfaceComponentTypeToString(entry.first) << std::setw(10) << std::right << entry.second << std::endl;  // Second entry is the dimension, first entry the enum type.
+    	    }
+            std::cout << std::setw(FROSCH_OUTPUT_INDENT) << " " << "------------------------------" << std::endl <<
+                std::setw(FROSCH_OUTPUT_INDENT) << " " << std::setw(15) << std::left << "Total" << std::setw(10) << std::right << coarseSpaceDimension << std::endl << std::endl;
+    	}
+    }
     comm->barrier();
 
     // Compare results with expected/reference values.
@@ -756,29 +775,64 @@ int main(int argc, char *argv[])
         comm->barrier();
         std::this_thread::sleep_for(std::chrono::nanoseconds(wait_ns));
 
-        if (not(converged)) exit_status = EXIT_FAILURE;
+        // Define a tolerance to check real numbers for relative errors.
+        // |a-b|/|b| <= tol is a success, where a is the computed value, and b is a reference value.
+        const double test_tol = std::pow(10.0,-(test_significantDigits-1)); // 3.14  -->  relError <= tol = 0.01
 
-        if ((test_numIter != -1) && (numIterations != test_numIter)) exit_status = EXIT_FAILURE;
+        // Make sure, the method converged.
+        if ((comm->getRank() == 0) && not(converged)) {
+            exit_status = EXIT_FAILURE;
+            std::cout << "Error: Method did not converge." << std::endl;
+        }
 
-        const double test_tol = std::pow(10.0,-(test_significantDigits-1)); // 3.14 --> relError < tol = 0.01
+        // Check number of iterations.
+        if ((comm->getRank() == 0) && (test_numIter != -1) && (numIterations != test_numIter)) {
+            exit_status = EXIT_FAILURE;
+            std::cout << "Error: Number of iterations does not match reference value." << std::endl;
+        }
 
         // Compare condition number estimate
-        if (test_condEst != -1.0) {
+        if ((comm->getRank() == 0) && (test_condEst != -1.0)) {
             const double relError = std::fabs(test_condEst - condEst)/std::fabs(test_condEst);
-            if (relError > test_tol) exit_status = EXIT_FAILURE;
+            if (relError > test_tol) {
+                exit_status = EXIT_FAILURE;
+                std::cout << "Error: Condition number does not match reference value." << std::endl;
+            }
         }
 
         // Compare relative residual
-        if (test_relRes != -1.0) {
+        if ((comm->getRank() == 0) && (test_relRes != -1.0)) {
 	        if (test_relRes > 0) {
 	            const double relError = std::fabs(test_relRes - status.achievedTol)/std::fabs(status.achievedTol);
-	            if (relError > test_tol) exit_status = EXIT_FAILURE;
+	            if (relError > test_tol) {
+                    exit_status = EXIT_FAILURE;
+                    std::cout << "Error: Relative residual does not match reference value." << std::endl;
+                }
 	        } else {
 	            // A residual of 0 is rare and was not required for testing so far.
 	            // If it is encountered, a test for zero is probably too harsh, and a test
 	            // for the absolute difference might be required.
-	            if (status.achievedTol != 0.0) exit_status = EXIT_FAILURE;
+	            if (status.achievedTol != 0.0) {
+                    exit_status = EXIT_FAILURE;
+                    std::cout << "Error: Relative residual does not match reference value." << std::endl;
+                }
 	        }
+        }
+
+        // Compare coarse space dimension
+        if (comm->getRank() == 0) {
+            if ((test_coarseSpaceDim != -1) && (coarseSpaceDimension != test_coarseSpaceDim)) {
+                exit_status = EXIT_FAILURE;
+                std::cout << "Error: Coarse space dimension does not match reference value." << std::endl;
+            }
+            if ((test_vertexFunctions != -1) && (dimensions[FROSch::InterfaceComponentType::Edge] != test_vertexFunctions)) {
+                exit_status = EXIT_FAILURE;
+                std::cout << "Error: Number of vertex functions does not match reference value." << std::endl;
+            }
+            if ((test_edgeFunctions != -1) && (dimensions[FROSch::InterfaceComponentType::Face] != test_edgeFunctions)) {
+                exit_status = EXIT_FAILURE;
+                std::cout << "Error: Number of edge functions does not match reference value." << std::endl;
+            }
         }
 
         // Compare eigenvalues
@@ -821,7 +875,7 @@ int main(int argc, char *argv[])
                 }
 
                 if (not(foundMatch)) {
-                    std::cout << "      Could not find a match for <this> interface component with global ID " << (*globalInterfaceIDs_vec)[kk] << ", which is associated with rank " << comm->getRank() << "." << std::endl;
+                    std::cout << "      Error: Could not find a match for <this> interface component with global ID " << (*globalInterfaceIDs_vec)[kk] << ", which is associated with rank " << comm->getRank() << "." << std::endl;
                     exit_status = EXIT_FAILURE;
                 }
         	}

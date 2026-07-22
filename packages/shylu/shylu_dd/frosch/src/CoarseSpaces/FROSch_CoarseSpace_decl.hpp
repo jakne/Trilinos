@@ -72,7 +72,8 @@ namespace FROSch {
         int addSubspace(ConstXMapPtr subspaceBasisMap,
                         ConstXMapPtr subspaceBasisMapUnique = null,
                         ConstXMultiVectorPtr subspaceBasis = null,
-                        UN offset = 0);
+                        UN offset = 0,
+                        InterfaceComponentType type = InterfaceComponentType::Undefined);
 
         int assembleCoarseSpace();
 
@@ -105,6 +106,11 @@ namespace FROSch {
 
         XMatrixPtr getGlobalBasisMatrix() const;
 
+        int getGlobalCoarseSpaceSize() const;
+
+        std::map<InterfaceComponentType,GO> getGlobalCoarseSpaceSizePerInterfaceComponent() const;
+
+
     protected:
 
         CommPtr MpiComm_;
@@ -112,6 +118,15 @@ namespace FROSch {
 
         ConstXMapPtrVec UnassembledBasesMaps_ = ConstXMapPtrVec(0);
         ConstXMapPtrVec UnassembledBasesMapsUnique_ = ConstXMapPtrVec(0);
+
+        // What type of coarse space is stored in 
+        // UnassembledSubspaceBases_[i], i.e., 
+        // was is computed on edges, vertices, ... 
+        // of the domain decomposition interface or
+        // based on the interior variables?
+        // This is stored in interfaceComponentTypes[i]
+        // if it was passed as a parameter to addSubspace(...).
+        std::vector<InterfaceComponentType> InterfaceComponentTypes_;
 
         ConstXMultiVectorPtrVec UnassembledSubspaceBases_ = ConstXMultiVectorPtrVec(0);
 

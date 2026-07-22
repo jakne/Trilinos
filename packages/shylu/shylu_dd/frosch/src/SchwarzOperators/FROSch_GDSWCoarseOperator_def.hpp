@@ -445,7 +445,7 @@ namespace FROSch {
                         XMultiVectorPtrVecPtr translations = this->computeTranslations(blockId,DDInterface_->getVertices());
                         ConstXMapPtr verticesEntityMap = DDInterface_->getVertices()->getEntityMap();
                         for (UN i=0; i<translations.size(); i++) {
-                            this->InterfaceCoarseSpaces_[blockId]->addSubspace(verticesEntityMap,null,translations[i]);
+                            this->InterfaceCoarseSpaces_[blockId]->addSubspace(verticesEntityMap,null,translations[i],0,InterfaceComponentType::Vertex);
                         }
                     }
                     // ShortEdges
@@ -453,14 +453,14 @@ namespace FROSch {
                         XMultiVectorPtrVecPtr translations = this->computeTranslations(blockId,DDInterface_->getShortEdges());
                         ConstXMapPtr shortEdgesEntityMap = DDInterface_->getShortEdges()->getEntityMap();
                         for (UN i=0; i<translations.size(); i++) {
-                            this->InterfaceCoarseSpaces_[blockId]->addSubspace(shortEdgesEntityMap,null,translations[i]);
+                            this->InterfaceCoarseSpaces_[blockId]->addSubspace(shortEdgesEntityMap,null,translations[i],0,InterfaceComponentType::ShortEdge);
                         }
                     }
                     if (useShortEdgeRotations) {
                         XMultiVectorPtrVecPtr rotations = this->computeRotations(blockId,dimension,nodeList,DDInterface_->getShortEdges(),(dimension==3));
                         ConstXMapPtr shortEdgesEntityMap = DDInterface_->getShortEdges()->getEntityMap();
                         for (UN i=0; i<rotations.size(); i++) {
-                            this->InterfaceCoarseSpaces_[blockId]->addSubspace(shortEdgesEntityMap,null,rotations[i]);
+                            this->InterfaceCoarseSpaces_[blockId]->addSubspace(shortEdgesEntityMap,null,rotations[i],0,InterfaceComponentType::ShortEdge);
                         }
                     }
                     // StraightEdges
@@ -468,14 +468,14 @@ namespace FROSch {
                         XMultiVectorPtrVecPtr translations = this->computeTranslations(blockId,DDInterface_->getStraightEdges());
                         ConstXMapPtr straightEdgesEntityMap = DDInterface_->getStraightEdges()->getEntityMap();
                         for (UN i=0; i<translations.size(); i++) {
-                            this->InterfaceCoarseSpaces_[blockId]->addSubspace(straightEdgesEntityMap,null,translations[i]);
+                            this->InterfaceCoarseSpaces_[blockId]->addSubspace(straightEdgesEntityMap,null,translations[i],0,InterfaceComponentType::StraightEdge);
                         }
                     }
                     if (useStraightEdgeRotations) {
                         XMultiVectorPtrVecPtr rotations = this->computeRotations(blockId,dimension,nodeList,DDInterface_->getStraightEdges(),(dimension==3));
                         ConstXMapPtr straightEdgesEntityMap = DDInterface_->getStraightEdges()->getEntityMap();
                         for (UN i=0; i<rotations.size(); i++) {
-                            this->InterfaceCoarseSpaces_[blockId]->addSubspace(straightEdgesEntityMap,null,rotations[i]);
+                            this->InterfaceCoarseSpaces_[blockId]->addSubspace(straightEdgesEntityMap,null,rotations[i],0,InterfaceComponentType::StraightEdge);
                         }
                     }
                     // Edges
@@ -483,14 +483,14 @@ namespace FROSch {
                         XMultiVectorPtrVecPtr translations = this->computeTranslations(blockId,DDInterface_->getEdges());
                         ConstXMapPtr edgesEntityMap = DDInterface_->getEdges()->getEntityMap();
                         for (UN i=0; i<translations.size(); i++) {
-                            this->InterfaceCoarseSpaces_[blockId]->addSubspace(edgesEntityMap,null,translations[i]);
+                            this->InterfaceCoarseSpaces_[blockId]->addSubspace(edgesEntityMap,null,translations[i],0,InterfaceComponentType::Edge);
                         }
                     }
                     if (useEdgeRotations) {
                         XMultiVectorPtrVecPtr rotations = this->computeRotations(blockId,dimension,nodeList,DDInterface_->getEdges());
                         ConstXMapPtr edgesEntityMap = DDInterface_->getEdges()->getEntityMap();
                         for (UN i=0; i<rotations.size(); i++) {
-                            this->InterfaceCoarseSpaces_[blockId]->addSubspace(edgesEntityMap,null,rotations[i]);
+                            this->InterfaceCoarseSpaces_[blockId]->addSubspace(edgesEntityMap,null,rotations[i],0,InterfaceComponentType::Edge);
                         }
                     }
 
@@ -502,7 +502,7 @@ namespace FROSch {
                         XMultiVectorPtrVecPtr translations = this->computeTranslations(blockId,DDInterface_->getFaces());
                         ConstXMapPtr facesEntityMap = DDInterface_->getFaces()->getEntityMap();
                         for (UN i=0; i<translations.size(); i++) {
-                            this->InterfaceCoarseSpaces_[blockId]->addSubspace(facesEntityMap,null,translations[i]);
+                            this->InterfaceCoarseSpaces_[blockId]->addSubspace(facesEntityMap,null,translations[i],0,InterfaceComponentType::Face);
                         }
                         FROSCH_TIMER_STOP(timeFacesGDSW);
                     } else if (useFaceTranslations & useAdaptiveCoarseSpace) {
@@ -1215,7 +1215,7 @@ namespace FROSch {
                         // Store interface coarse space.
                         const GO INVALID = Teuchos::OrdinalTraits<GO>::invalid();
                         ConstXMapPtr interfItemsEntityMap = MapFactory<LO,GO,NO>::Build(this->K_->getRowMap()->lib(),INVALID,*localInterfFnIDToGlobalCoarseFnID(),0,this->MpiComm_);
-                        this->InterfaceCoarseSpaces_[blockId]->addSubspace(interfItemsEntityMap,null,assembledListOfConstructedInterfFnOfRank[0]);
+                        this->InterfaceCoarseSpaces_[blockId]->addSubspace(interfItemsEntityMap,null,assembledListOfConstructedInterfFnOfRank[0],0,InterfaceComponentType::Face);
 
                         if (addMPIBarriersForSomeTimers) this->MpiComm_->barrier();
                         FROSCH_TIMER_STOP(timeInterfItemsAGDSW6);
@@ -1227,7 +1227,27 @@ namespace FROSch {
                         XMultiVectorPtrVecPtr rotations = this->computeRotations(blockId,dimension,nodeList,DDInterface_->getFaces());
                         ConstXMapPtr facesEntityMap = DDInterface_->getFaces()->getEntityMap();
                         for (UN i=0; i<rotations.size(); i++) {
-                            this->InterfaceCoarseSpaces_[blockId]->addSubspace(facesEntityMap,null,rotations[i]);
+                            this->InterfaceCoarseSpaces_[blockId]->addSubspace(facesEntityMap,null,rotations[i],0,InterfaceComponentType::Face);
+                        }
+                    }
+
+                    // Determine the individual coarse space dimensions associated with vertices, edges etc.
+                    std::map<InterfaceComponentType,GO> dimensions = this->InterfaceCoarseSpaces_[blockId]->getGlobalCoarseSpaceSizePerInterfaceComponent();
+
+                    // To determine the total coarse space dimension, we can call
+                    // this->InterfaceCoarseSpaces_[blockId]->getGlobalCoarseSpaceSize()
+                    // but this would do the same work as the previous call to
+                    // getGlobalCoarseSpaceSizePerInterfaceComponent().
+                    // Thus, here we compute the sum of the individual dimensions.
+                    GO coarseSpaceDimension = 0;
+                    for (const auto& entry : dimensions) {
+                        coarseSpaceDimension += entry.second;  // Second entry is the dimension, first entry the enum type.
+                    }
+
+                    if (this->ParameterList_->isParameter("Return coarse space dimensions")) {
+                        if (this->ParameterList_->get("Return coarse space dimensions",false)) {
+                            this->ParameterList_->set("coarseSpaceDimensions", dimensions);
+                            this->ParameterList_->set("coarseSpaceDimension", coarseSpaceDimension);
                         }
                     }
 
@@ -1281,6 +1301,35 @@ namespace FROSch {
                         << " |"
                         << "\n" << setw(FROSCH_OUTPUT_INDENT) << " "
                         << setw(89) << "-----------------------------------------------------------------------------------------"
+                        << endl;
+
+                        // Coarse space dimensions for different interface components
+                        cout
+                        << "\n" << setw(FROSCH_OUTPUT_INDENT) << " "
+                        << setw(89) << "-----------------------------------------------------------------------------------------"
+                        << "\n" << setw(FROSCH_OUTPUT_INDENT) << " "
+                        << "| "
+                        << left << setw(74) << "> GDSW coarse space dimensions " << right << setw(8) << "(Level " << setw(2) << this->LevelID_ << ")"
+                        << " |"
+                        << "\n" << setw(FROSCH_OUTPUT_INDENT) << " "
+                        << setw(89) << "========================================================================================="
+                        << "\n" << setw(FROSCH_OUTPUT_INDENT) << " "
+                        << "| " << left << setw(41) << "Vertices "      << " | " << right << setw(41) << dimensions[InterfaceComponentType::Vertex]       << " |"
+                        << "\n" << setw(FROSCH_OUTPUT_INDENT) << " "
+                        << "| " << left << setw(41) << "ShortEdges "    << " | " << right << setw(41) << dimensions[InterfaceComponentType::ShortEdge]    << " |"
+                        << "\n" << setw(FROSCH_OUTPUT_INDENT) << " "
+                        << "| " << left << setw(41) << "StraightEdges " << " | " << right << setw(41) << dimensions[InterfaceComponentType::StraightEdge] << " |"
+                        << "\n" << setw(FROSCH_OUTPUT_INDENT) << " "
+                        << "| " << left << setw(41) << "Edges "         << " | " << right << setw(41) << dimensions[InterfaceComponentType::Edge]         << " |"
+                        << "\n" << setw(FROSCH_OUTPUT_INDENT) << " "
+                        << "| " << left << setw(41) << "Faces "         << " | " << right << setw(41) << dimensions[InterfaceComponentType::Face]         << " |"
+                        << "\n" << setw(FROSCH_OUTPUT_INDENT) << " "
+                        << "| " << left << setw(41) << "Undefined "     << " | " << right << setw(41) << dimensions[InterfaceComponentType::Undefined]    << " |"
+                        << "\n" << setw(FROSCH_OUTPUT_INDENT) << " "
+                        << setw(89) << "-----------------------------------------------------------------------------------------"
+                        << "\n" << setw(FROSCH_OUTPUT_INDENT) << " "
+                        << "| " << left << setw(41) << "Total "         << " | " << right << setw(41) << dimensions[InterfaceComponentType::Undefined]    << " |"
+                        << "\n" << setw(FROSCH_OUTPUT_INDENT) << " "
                         << endl;
                     }
                 }

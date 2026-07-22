@@ -356,6 +356,8 @@ namespace FROSch {
     template <typename SC, typename LO, typename GO, typename NO> 
     Teuchos::RCP<Teuchos::SerialDenseMatrix<LO,SC>> convert_GlobalTMultiVector_to_SerialDenseMatrix(Teuchos::RCP<const Tpetra::MultiVector<SC,LO,GO,NO>> matrix_in);
 
+    const char* interfaceComponentTypeToString(InterfaceComponentType type);
+
 #ifdef HAVE_FROSch_DEBUG
     /**
      * @namespace FROSch::debug
